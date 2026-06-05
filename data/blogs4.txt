@@ -1,0 +1,440 @@
+Andrej Karpathy blog
+About
+Quantifying Hacker News with 50 days of data
+Nov 27, 2013
+
+Quantifying Hacker News
+I thought it would be fun to analyze the activity on one of my favorite sources of interesting links and information, Hacker News. My source of data is a script I’ve set up some time in August that downloads HN (the Front page and the New stories page) every minute. We will be interested in visualizing the stories as they get upvoted during the day, figuring out which domains/users are most popular, what topics are most popular, and the best time to post a story. I’m making all my data and code (Python data collection scripts + IPython Notebook for analysis) available in case you’d like to carry out a similar analysis.
+
+Data collection protocol
+I set up a very simple python script that scrapes the HN front page and the new stories page every minute. A single day of data begins at 4am (PST) and ends at 4am the next day. The .html files are saved compressed as gzipped pickles and one day occupies roughly 10mb in this format. I had bring down my machine for a few days a few times so there are some gaps in the data, but in the end we get 47 days of data from period between August 22 and October 30.
+
+Raw HTML data parsing
+The parsing Python script uses BeautifulSoup to convert the raw HTML into a more structured JSON. This script was by the way by no means simple to write – HN is based on unstructured tables and I had to discover many strange edge cases in its behavior along the way. At the end I ended up with a 100-line ugliest-parsing-function-ever (really, I’m not proud of it) but it works and outputs something like the following for a single story at a specific snapshot:
+
+{
+'domain': u'play.google.com', 'title': u'Nexus 5', 
+'url': u'https://play.google.com/store/devices/details?id=nexus_5_black_16gb', 
+'num_comments': 42, 'rank': 1, 'points': 65, 
+'user': u'sonier', 'minutes_ago': 39, 'id': u'6648519'
+}
+We get 60 such entries every minute (30 for front page and 30 for new page) and these are again all saved to disk. We are now ready to bring out the IPython Notebook and get to the juicy analysis!
+
+The Analysis: Detailed analysis
+Head over to the IPython Notebook rendered as HTML for the analysis:
+
+hn
+
+Note: I had the entire dataset and .ipynb Ipython Notebook source available for download but recently took it down to save space on my host (sorry).
+
+
+Andrej Karpathy blog
+ karpathy
+ karpathy
+Musings of a Computer Scientist.Andrej Karpathy blog
+About
+Interview with Data Science Weekly on Neural Nets and ConvNetJS
+Apr 26, 2014
+
+I thought I should link this: I’ve given an interview ~two months ago about ConvNetJS, some of my background and a few perspectives on neural net trends and where the field seems to be going, at least in academia. Find it here:
+
+http://www.datascienceweekly.org/blog/14-training-deep-learning-models-browser-andrej-karpathy-interview
+
+
+Andrej Karpathy blog
+ karpathy
+ karpathy
+Musings of a Computer Scientist.Andrej Karpathy blog
+About
+Switching Blog from Wordpress to Jekyll
+Jul 1, 2014
+
+Inspired by Mark Reid’s blog post Switching from Jekyll to Hakyll I decided to abandon Wordpress and give Jekyll a try (note, I currently do not yet feel pro enough to switch to Haskell-based Hakyll). I can confidently say that I could not be happier about this decision.
+
+Wordpress Monster
+“So what’s wrong with Wordpress?” You may ask. Let’s see, everything:
+
+Wordpress blogs are clunky, slow and bloated.
+Wordpress is dynamically rendered with .php. There are really only few niche applications where this is necessary. Dynamic code execution exposes your blog to hackers and exploits: zero-day attacks, viruses, etc. My own blog was hacked ~2 months ago and all my posts had been infected with spammy content that kept re-inserting itself magically when I removed it.
+Wordpress is popular among the masses of people who don’t know any better, and therefore attracts the largest amount of spammers.
+Your posts are stuck forever in an ugly, Wordpress-specific SQL database (ew). You can’t easily import/export posts. You do not really own your content in raw and nimble form.
+Wordpress is blocked in China.
+Wordpress is a bloated, clunky, slow, vulnerable, closed mess.
+
+Jekyll <3
+Jekyll describes itself as a tool for building “Simple, blog-aware, static sites”, and was originally written by one of the Github co-founders, Tom Preston-Werner. It is flat and transparent: Your blog workspace is a single folder with a config file, and a few folders for CSS and HTML templates. All my content, for example, lives in two folders:
+
+My blog posts are just files in a single folder _posts, written in Markdown. Including this post, of course.
+My images are in a single folder assets.
+That’s it. You call $ jekyll build from command line and it will automatically render all posts it finds in your _posts folder from markdown to HTML, wraps it with header/footer templates, creates the parent index page that lists all your posts and outputs everything into a directory _site. The _site directory holds your entire webpage as static content. It can then be uploaded to a webserver wherever you like.
+
+The entire code base consists of like 7 files. It’s easy to see how the HTML templates get composed to your final site. It’s trivial to tweak the CSS or any of the HTML templates. For example, I added Google Analytics tracking code to all my pages by tweaking the html template, and also Disqus comments to all my posts by tweaking the posts template with the Disqus Javascript code.
+
+Github integration
+Lastly, as you might expect Jekyll is tightly integrated with Github: create a repository that looks like username.github.io and add your files to the repo. Github will automatically compile your files with Jekyll and make the _site folder available. For example, mine lives on karpathy.github.io. Thus, Github makes sure that your blog is beautifully backed up forever in simple markdown, and also hosts your content!
+
+Jekyll strikes the balance: It’s packed with just the right amount of features.
+
+Example workflow
+To give a flavor for the workflow, to add a new blog post I proceed as follows:
+
+$ cd _posts
+$ vim 2014-07-02-example-page.markdown
+Now we write the blog post in markdown, here’s an example file:
+
+---
+layout: post
+title:  "Post title"
+excerpt: "A nice post"
+date:   2014-07-02 10:00:00
+---
+
+Hello world, this is **markdown**.
+
+Lets pop back out to console now. I could preview the changes in a local webserver with $ jekyll serve --watch (the watch switch refreshes any updated files as you write them). Now let’s just push it live:
+
+$ cd ..
+$ git add .
+$ git commit -m "new blog post"
+$ git push
+After the last command, Github will see that my repo has changed and automatically refreshes karpathy.github.io to point to the newly generated _site. My post is live!
+
+Anyway, that’s just a brief taste. Check out Jekyll and get blogging in a sane way!
+
+
+Andrej Karpathy blog
+ karpathy
+ karpathy
+Musings of a Computer Scientist.
+Andrej Karpathy blog
+About
+Visualizing Top Tweeps with t-SNE, in Javascript
+Jul 2, 2014
+
+
+
+I was recently looking into various ways of embedding unlabeled, high-dimensional data in 2 dimensions for visualization. A wide variety of methods have been proposed for this task. This Review paper from 2009 contains nice references to many of them (PCA, Kernel PCA, Isomap, LLE, Autoencoders, etc.). If you have Matlab available, the Dimensionality Reduction Toolbox has a nice implementation of many of these methods. Scikit Learn also has a brief section on Manifold Learning along with the implementation.
+
+Among these algorithms, t-SNE comes across as one that has a pleasing, intuitive formulation, simple gradient and nice properties. Here is a Google Tech Talks video of Laurens van der Maaten (the author) explaining the method. I set out to re-implement t-SNE from scratch since doing so is the best way of learning something that I know of, and what better language to do this in than - Javascript! :)
+
+Long story short, I’ve implemented t-SNE in JS, released it as tsnejs on Github, and created a small demo that uses the library to visualize the top twitter accounts based on what they talk about. In this post, I thought it might be fun to document a small 1-day project like this, from beginning to end. This also gives me an opportunity to describe some of my projects toolkit, which others might find useful.
+
+Final demo
+First, take a look at the final demo. To create this demo I found the top 500 most followed accounts on Twitter, downloaded 200 of their tweets and then measured differences in what they tweet about. These differences are then fed to t-SNE to produce a 2-dimensional visualization, where nearby people tweet similar things. Fun!
+
+Fetching top tweeps
+We first have to identify the top 500 tweeps. I googled “top twitter accounts” and found http://twitaholic.com/ , which lists them out. However, the accounts are embedded in the webpage and we need to extract them in structured format. For this, I love a recent YC startup Kimono; I use it extensively to scrape structured data from websites. It lets you click the elements of interest (the Twitter handles in this case), and extracts them out in JSON. Easy as pie!
+
+Collecting tweets
+Now we have a list of top 500 tweeps and we’d like to obtain their tweets to get an idea about what they tweet about. My library of choice for this task is Tweepy. Their documentation is quite terrible but if you browse the source code things seem relatively simple. Here’s an example call to get 200 tweets for a given user:
+
+tweets = tweepy.Cursor(api.user_timeline, screen_name=user).items(200)
+We iterate this over all users, extract the tweet text, and dumpt it all into files, one per account. I had to be careful with two annoyances in process:
+
+Twitter puts severe rate limits on API calls, so this actually took several hours to collect, wrapped up in try catch blocks and time.sleep calls.
+The returned text is in Unicode, which leads to trouble if you’re going to try to write it to file.
+One solution for the second annoyance is to use the codecs library:
+
+import codecs
+codecs.open(filename, 'w', 'utf-8').write(tweet_texts)
+Oh, and lets also grab and save the Twitter profile pictures, which we’ll use in the visualization. An example for one user might be:
+
+import urllib # yes I know this is deprecated
+userobj = api.get_user(screen_name = user)
+urllib.urlretrieve(imgname, userobj.profile_image_url) # save image to disk
+I should mention that I write a lot of quick and dirty Python code in IPython Notebooks, which I very warmly recommend. If you’re writing all your Python in text editors, you’re seriously missing out.
+
+Quantifying Tweep differences
+We now have 500 tweeps and their 200 most recent tweets concatenated in 500 files. We’d now like to find who tweets about similar things. Scikit learn is very nice for quick NLP tasks like this. In particular, we load up all the files and create a 500-long array where every element are the 200 concatenated tweets. Then we use the TfidfVectorizer class to extract all words and bigrams from the text data, and to turn every user’s language into one tfidf vector. This vector is a fingerprint of the language that each person uses. Here’s how we can simply wire this up:
+
+from sklearn.feature_extraction.text import CountVectorizer,TfidfVectorizer
+vectorizer = TfidfVectorizer(min_df=2, stop_words = 'english',\
+strip_accents = 'unicode', lowercase=True, ngram_range=(1,2),\
+norm='l2', smooth_idf=True, sublinear_tf=False, use_idf=True)
+X = vectorizer.fit_transform(user_language_array)
+D = -(X * X.T).todense() # Distance matrix: dot product between tfidf vectors
+In the above, user_language_array is the 500-element array that has the concatenated tweets. The TfidfVectorizer class looks through all tweets and takes note of all words (unigrams) and word bigrams (i.e. series of two words). It builds a dictionary out of all unigram/bigrams and essentially counts up how often every person uses each one. Here’s an example of some tweet text converted to unigram/bigrams:
+
+
+
+The tfidf vectors are returned stacked up as rows inside X, which has size 500 x 87,342. Every one of the 87,342 dimensions corresponds to some unigram or bigram. For example, the 10,000th dimension could correspond to the frequency of usage of the unigram “YOLO”. The vectors are L2 normalized, so the dot product between these vectors is related to the angle between any two vectors. This can be interpreted as the similarity of language. Finally, we dump the matrix and the usernames into a JSON file, and we’re ready to load things up in Javascript!
+
+The Visualization parts
+We now create an .html file and import jQuery (as always), and d3js, which I like to use for any kind of plotting. We load up the JSON that stores our distances and usernames with jQuery, and use d3js to initialize the SVG element that will hold all the users. For starters, we plot the users at random position but we will soon arrange them so that similar users cluster nearby with t-SNE. Inspect the code on the demo page to see the jQuery and d3js parts (Ctrl+U). In the code, we see a few things I like to use:
+
+I like to use Google Fonts to get prettier-than-default fonts. Here, for example I’m importing Roboto, and then using it in the CSS.
+Next, we see an import of syntaxhighlighter code which dynamically highlights code on your page.
+Then we see Google tracking JS code, which lets me track statistics for the website on Google Analytics.
+I didn’t use Bootstrap on this website because it’s very small and simple, but normally I would because this makes your website right away work nicely on mobile.
+t-SNE
+
+
+Finally we get to the meat! We need to arrange the users in our d3js plot so that similar users appear nearby. The t-SNE cost function was described in this 2008 paper by van der Maaten and Hinton. Similar to many other methods, we set up two distance metrics in the original and the embedded space and minimize their difference. In t-SNE in particular, the original space distance is based on a Gaussian distribution and the embedded space is based on the heavy-tailed Student-t distribution. The KL-divergence formulation has the nice property that it is asymmetric in how it penalizes distances between the two spaces:
+
+If two points are close in the original space, there is a strong attractive force between the the points in the embedding
+Conversely, if the two points are far apart in the original space, the algorithm is relatively free to place these points around.
+Thus, the algorithm preferentially cares about preserving the local structure of the high-dimensional data. Conveniently, the authors link to multiple implementations of t-SNE on their website, which allows us to see some code for reference as well (if you’re like me, reading code can be much easier than reading text descriptions). We’re ready to write up the Javascript version!
+
+The final code can be seen in tsne.js file, on Github. Note how we’re wrapping all the JS code into a function closure so that we don’t pollute the global namespace. This is a very common trick in Javascript that is essentially used to implement classes. Note also the large number of utility boring code I had to include up top because Javascript is not exactly intended for math :) The core function where all magic happens is costGrad(), which computes the cost function and the gradient of the objective. The correct implementation of this function is double checked with debugGrad() gradient check. Once the analytic gradient checks out compared to numeric gradient, we’re good to go! We set up a piece of Javascript to call our step() function repeatedly (setInterval() call), and we plot the solution as it gets computed.
+
+Phew! Final result, again: t-SNE demo.
+
+I hope some of the references were useful. If you use tsnejs to embed some of your data, let me know!
+
+Bonus: Word Embedding t-SNE Visualization
+I created another demo, this time to visualize word vector embeddings. Head over here to see it. The word embeddings are trained as described in this ACL 2012 paper.
+
+The (unsupervised) objective function makes it so that words that are interchangable (i.e. occur in very similar surrounding context) are close in the embedding. This comes across in the visualization!
+
+
+Andrej Karpathy blog
+ karpathy
+ karpathy
+Musings of a Computer Scientist.Andrej Karpathy blog
+About
+Switching Blog from Wordpress to Jekyll
+Jul 1, 2014
+
+Inspired by Mark Reid’s blog post Switching from Jekyll to Hakyll I decided to abandon Wordpress and give Jekyll a try (note, I currently do not yet feel pro enough to switch to Haskell-based Hakyll). I can confidently say that I could not be happier about this decision.
+
+Wordpress Monster
+“So what’s wrong with Wordpress?” You may ask. Let’s see, everything:
+
+Wordpress blogs are clunky, slow and bloated.
+Wordpress is dynamically rendered with .php. There are really only few niche applications where this is necessary. Dynamic code execution exposes your blog to hackers and exploits: zero-day attacks, viruses, etc. My own blog was hacked ~2 months ago and all my posts had been infected with spammy content that kept re-inserting itself magically when I removed it.
+Wordpress is popular among the masses of people who don’t know any better, and therefore attracts the largest amount of spammers.
+Your posts are stuck forever in an ugly, Wordpress-specific SQL database (ew). You can’t easily import/export posts. You do not really own your content in raw and nimble form.
+Wordpress is blocked in China.
+Wordpress is a bloated, clunky, slow, vulnerable, closed mess.
+
+Jekyll <3
+Jekyll describes itself as a tool for building “Simple, blog-aware, static sites”, and was originally written by one of the Github co-founders, Tom Preston-Werner. It is flat and transparent: Your blog workspace is a single folder with a config file, and a few folders for CSS and HTML templates. All my content, for example, lives in two folders:
+
+My blog posts are just files in a single folder _posts, written in Markdown. Including this post, of course.
+My images are in a single folder assets.
+That’s it. You call $ jekyll build from command line and it will automatically render all posts it finds in your _posts folder from markdown to HTML, wraps it with header/footer templates, creates the parent index page that lists all your posts and outputs everything into a directory _site. The _site directory holds your entire webpage as static content. It can then be uploaded to a webserver wherever you like.
+
+The entire code base consists of like 7 files. It’s easy to see how the HTML templates get composed to your final site. It’s trivial to tweak the CSS or any of the HTML templates. For example, I added Google Analytics tracking code to all my pages by tweaking the html template, and also Disqus comments to all my posts by tweaking the posts template with the Disqus Javascript code.
+
+Github integration
+Lastly, as you might expect Jekyll is tightly integrated with Github: create a repository that looks like username.github.io and add your files to the repo. Github will automatically compile your files with Jekyll and make the _site folder available. For example, mine lives on karpathy.github.io. Thus, Github makes sure that your blog is beautifully backed up forever in simple markdown, and also hosts your content!
+
+Jekyll strikes the balance: It’s packed with just the right amount of features.
+
+Example workflow
+To give a flavor for the workflow, to add a new blog post I proceed as follows:
+
+$ cd _posts
+$ vim 2014-07-02-example-page.markdown
+Now we write the blog post in markdown, here’s an example file:
+
+---
+layout: post
+title:  "Post title"
+excerpt: "A nice post"
+date:   2014-07-02 10:00:00
+---
+
+Hello world, this is **markdown**.
+
+Lets pop back out to console now. I could preview the changes in a local webserver with $ jekyll serve --watch (the watch switch refreshes any updated files as you write them). Now let’s just push it live:
+
+$ cd ..
+$ git add .
+$ git commit -m "new blog post"
+$ git push
+After the last command, Github will see that my repo has changed and automatically refreshes karpathy.github.io to point to the newly generated _site. My post is live!
+
+Anyway, that’s just a brief taste. Check out Jekyll and get blogging in a sane way!
+
+
+Andrej Karpathy blog
+ karpathy
+ karpathyAndrej Karpathy blog
+About
+Quantifying Hacker News with 50 days of data
+Nov 27, 2013
+
+Quantifying Hacker News
+I thought it would be fun to analyze the activity on one of my favorite sources of interesting links and information, Hacker News. My source of data is a script I’ve set up some time in August that downloads HN (the Front page and the New stories page) every minute. We will be interested in visualizing the stories as they get upvoted during the day, figuring out which domains/users are most popular, what topics are most popular, and the best time to post a story. I’m making all my data and code (Python data collection scripts + IPython Notebook for analysis) available in case you’d like to carry out a similar analysis.
+
+Data collection protocol
+I set up a very simple python script that scrapes the HN front page and the new stories page every minute. A single day of data begins at 4am (PST) and ends at 4am the next day. The .html files are saved compressed as gzipped pickles and one day occupies roughly 10mb in this format. I had bring down my machine for a few days a few times so there are some gaps in the data, but in the end we get 47 days of data from period between August 22 and October 30.
+
+Raw HTML data parsing
+The parsing Python script uses BeautifulSoup to convert the raw HTML into a more structured JSON. This script was by the way by no means simple to write – HN is based on unstructured tables and I had to discover many strange edge cases in its behavior along the way. At the end I ended up with a 100-line ugliest-parsing-function-ever (really, I’m not proud of it) but it works and outputs something like the following for a single story at a specific snapshot:
+
+{
+'domain': u'play.google.com', 'title': u'Nexus 5', 
+'url': u'https://play.google.com/store/devices/details?id=nexus_5_black_16gb', 
+'num_comments': 42, 'rank': 1, 'points': 65, 
+'user': u'sonier', 'minutes_ago': 39, 'id': u'6648519'
+}
+We get 60 such entries every minute (30 for front page and 30 for new page) and these are again all saved to disk. We are now ready to bring out the IPython Notebook and get to the juicy analysis!
+
+The Analysis: Detailed analysis
+Head over to the IPython Notebook rendered as HTML for the analysis:
+
+hn
+
+Note: I had the entire dataset and .ipynb Ipython Notebook source available for download but recently took it down to save space on my host (sorry).
+
+
+Andrej Karpathy blog
+ karpathy
+ karpathy
+Musings of a Computer Scientist.Andrej Karpathy blog
+About
+Chrome Extension Programming: Illustrating a Basic Survival Skill with a Twitter Case Study
+Nov 23, 2013
+
+Extension Hacking
+I wanted to share a few examples of a powerful skill that I’ve been gradually picking up over the last year. It is simply the ability to quickly hack together custom browser extensions in Chrome and using them to customize my favorite websites. Writing extensions is very fast: you need a short manifest file that contains some boring meta information, a few js/html files with your code in a folder, and then you simply activate the folder as an extension from the Extensions menu with a few clicks. In general, you can do a lot of fancy things with extensions:
+
+add buttons, context-menu items
+modify functionality of Omnibox
+create extension-specific webpages that display various data/settings
+your extension is allowed to have local (or synced), persistent storage of data
+you can run almost arbitrary Javascript over the DOM of any webpage
+I can’t stress how powerful the last item is. You can run Javascript. On top of any webpage. You can Read the page DOM. You can write to it, automatically, on load of the webpage or even periodically! This gives you complete freedom in modifying any webpage to your tastes: remove annoying content, add new features, log/scrape website data, change the layout, etc. It’s completely crazy!
+
+I’ll walk you through some examples with possible mods of Twitter just to give you a glimpse of how easy and powerful this can be. Twitter is fun and I use it often, but their website is annoying, has some ugly elements, and sometimes lacks certain functionality I would like it to have. A normal person would request features and wait, but with the dark arts of extension hacking we can do much better. Lets get right to it.
+
+Fixing the Ugly
+A recent change on Twitter added this ugly text, visible by default and always, on every single tweet: 
+
+I understand it gets people to accidentally click on these more and pads Twitter’s engagement numbers, but it’s useless, ugly, and it just takes up too much space. Lets right click on one of these and choose Inspect Element. This opens up the HTML of the page and here we see the culprit DOM elements:
+
+
+
+So we have a list <ul></ul> with items <li> one for each of Reply, Retweet, Favorite and More. Inside every of them they have a <a>(anchor that processes the click action), deeper we have a <span> that becomes the icon, and finally followed by the ugly text wrapped in <b>. That looks easy enough, we will find all these elements based on their  class attribute, descend down to find the text and get rid of it.  So we create a new folder for TwitterClean extension, copy paste some manifest boring code and set it up to load a javascript file anytime twitter loads. For example, right after twitter.com page loads, lets execute:
+
+var clean_twitter = function(){
+  var ugly = [];
+  ugly.push('.action-reply-container');
+  ugly.push('.action-rt-container');
+  ugly.push('.action-del-container');
+  ugly.push('.action-fav-container');
+  ugly.push('.more-tweet-actions');
+
+  for(var i=0;i&lt;ugly.length;i++) {
+    var u = $(ugly[i]).find('b');
+    u.text('');
+  }
+}
+Load the Extension, refresh Twitter and poof! All the text is gone and we’re just left with the icons. These suffice. Oh and while we’re at code we run automatically on load of twitter.com, lets slip this one is as well:
+
+$('.promoted-tweet').hide(); // oops!
+I’ll let you figure out what that single naughty line of code does for you :)
+
+Loading new tweets automatically
+Here’s another annoyance: you have your Twitter running on your side monitor and new tweets come in, but Twitter doesn’t load them automatically! It just shows this:
+
+
+
+That’s the passive aggressive look of Twitter telling you that there are two more tweets to show, but also refusing to actually show them. That would be too useful to their users. Instead, they want you to stop what you’re doing and click the button to load the new tweets. Luckily, you are skilled at extension hacking so you can simply right click the caption, go to Inspect Element, and see that the <div> element that tells you there are more tweets has class “js-new-tweets-bar”. Easy enough:
+
+var periodic = function() {
+  L = document.getElementsByClassName('js-new-tweets-bar');
+  if(L.length > 0){
+    L[0].click();
+  }
+}
+setInterval(periodic, 1000);
+When this gets run when twitter.com loads, it sets up the code to look for the annoying bar every second (1000 milliseconds) and then runs its click event handler which loads the new tweets. That’s all it takes, and now your tweets are streaming down automatically whenever they are available without you having to explicitly refresh them all the time. We’ve only written code for 5 minutes and in that time we tweaked the way Twitter looked, removed some “functionality” and added some functionality! We’re on a roll! Let’s do something fancier now.
+
+Highlighting tweets from rare tweeters (wait, or tweepers?)
+One day I decided to collect tweets on my timeline over a period of a week using Twitter’s REST API and saw that 30 accounts make up 50% of everything I see on Twitter. Since I follow 384 accounts in total, that’s only 7%! Unfortunately, for Twitter every tweet is created equal, which means that this annoying social media guru person who tweets 100 times a day completely drowns tweets coming from your other friends who believe that one should also have something worthy of tweeting too. Okay well it’s not exactly like that but I wished there was a mechanism for highlighting the very infrequent tweeters and seeing that low frequency content. Twitter will never implement this because it makes Zero sense for their revenue model, but luckily, we can hack this together quite easily! First, here’s a function that goes through all tweets on your timeline, looks at who tweeted, and “charges” every unique tweet to the originating user:
+
+var charge_tweets = function() {
+
+  // get all tweets in twitter timeline
+  var items = $('.tweet');
+  for(var i=0;i&lt;items.length;i++) {
+    var it = items[i];
+
+    // extract information from tweet HTML
+    var original_user = $(it).attr('data-screen-name');
+    var retweeter = $(it).attr('data-retweeter');
+    var tweet_id = $(it).attr('data-tweet-id');
+
+    // a bit of logic
+    var charged_user = original_user;
+    if(typeof retweeter !== 'undefined') {
+      charged_user = retweeter;
+    }
+
+    // charge tweet to the user
+    if(charge.hasOwnProperty(charged_user)) {
+      var L = charge[charged_user];
+      if($.inArray(tweet_id, L) === -1) {
+        L.push(tweet_id);  
+      }
+    } else {
+      charge[charged_user] = [tweet_id];
+    }
+  }
+};
+Basically, it turns out every tweet has class “tweet”, so it is trivial to iterate over them as seen above. Similarly, by inspecting the way the HTML is laid out, it turns out we can simply scrape the user and the (unique) tweet id and use it to build up a dictionary of user_string -> [tweet id, ...]. Of course, we will have to let this accumulate for a few days before it measures a good tweeting frequency distribution for all people we follow as we visit Twitter again and again always seeing new tweets from more people. But this also means we have to load and save the charge dictionary from Chrome’s local extension storage or otherwise we would lose all our charging work whenever we close the Tab! Easy enough:
+
+var save_charge = function() {
+  chrome.storage.local.set({'charge': charge});
+}
+
+var load_charge = function() {
+  chrome.storage.local.get('charge', function (result) {
+    if(result.charge) {
+      charge = result.charge;
+      console.log('loaded tweet frequency stats:');
+      console.log(charge);
+    } else {
+      console.log('no tweet frequency to load');
+    }
+  });
+}
+Now we just make sure to run load_charge() at start up, and save_charge() anytime there are new tweets and our charge dictionary changes. Based on this charge dictionary we can easily find, say, the 50th percentile frequency, and highlight any tweet that comes from a user who tweets less often than 50% of the users we follow:
+
+var display_charges = function() {
+
+  var items = $('.tweet');
+  for(var i=0;i&lt;items.length;i++) {
+    var it = items[i];
+
+    // ... as above and then:
+
+    var charged_tweets = charge[charged_user];
+    var charge_count = charged_tweets.length;
+
+    // adjust highlight color of the tweet according to rareness
+    if(charge_percentile &gt; 0) {
+      var ratio = charge_count / charge_percentile;
+      var x = Math.floor(Math.min(ratio,1)*255);
+      $(it).css('background-color', 'rgb(255,255,' + x + ')');
+    }
+  }
+}
+This is just one possibility out of many. Here, ratio will be low for users who rarely tweet, and we’re setting their tweet to be yellow based on their rareness. Very hard to not notice on your timeline! :) And while we’re at it, why not also fit in:
+
+var VIP = ['elonmusk'];
+if($.inArray(charged_user, VIP) !== -1) {
+  $(it).css('background-color', 'rgb(150,255,150)'); 
+}
+This way, Elon Musk’s (or your other Twitter favorites) tweets will always glow a vibrant, green color that is hard to notice! Nice. Here’s what we get:
+
+
+
+Just look at that! Mashable and some person who needed every single one of his followers to know “Aarrrgh” look normal, Elon’s tweets are hard to miss green, and someone who doesn’t tweet relatively as often is highlighted a bit as yellow.
+
+Summary
+It took us ~100 lines and 10 minutes of Javascript (with a bit of practice) and we tweaked Twitter’s look, removed err… undesirable content, made Twitter autorefresh, and added an entirely new feature that highlights infrequent tweepers!
+
+Yet we’ve only barely scratched the surface. If you’re  comfortable with navigating HTML of pages with Chrome’s awesome inspector and writing HTML/Javascript/CSS, these quick hacks have the potential to significantly improve your online experience by giving you powerful options for customizing your favorite sites. And if you are not comfortable, perhaps it’s time to head over to Chrome Extensions “Getting Started” and write a few hacks :)
+
+Oh, and if you’d like the full code of the above, you may find it here: LINK (Note it is a bit rough around the edges, but then it is a quick hack after all!). Let me know if you have any issues on @karpathy, and until later!
+
+
+Andrej Karpathy blog
+ karpathy
+ karpathy
+Musings of a Computer Scientist.
+Musings of a Computer Scientist.

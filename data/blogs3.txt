@@ -1,0 +1,1049 @@
+Andrej Karpathy blog
+About
+The Unreasonable Effectiveness of Recurrent Neural Networks
+May 21, 2015
+
+There’s something magical about Recurrent Neural Networks (RNNs). I still remember when I trained my first recurrent network for Image Captioning. Within a few dozen minutes of training my first baby model (with rather arbitrarily-chosen hyperparameters) started to generate very nice looking descriptions of images that were on the edge of making sense. Sometimes the ratio of how simple your model is to the quality of the results you get out of it blows past your expectations, and this was one of those times. What made this result so shocking at the time was that the common wisdom was that RNNs were supposed to be difficult to train (with more experience I’ve in fact reached the opposite conclusion). Fast forward about a year: I’m training RNNs all the time and I’ve witnessed their power and robustness many times, and yet their magical outputs still find ways of amusing me. This post is about sharing some of that magic with you.
+
+We’ll train RNNs to generate text character by character and ponder the question “how is that even possible?”
+
+By the way, together with this post I am also releasing code on Github that allows you to train character-level language models based on multi-layer LSTMs. You give it a large chunk of text and it will learn to generate text like it one character at a time. You can also use it to reproduce my experiments below. But we’re getting ahead of ourselves; What are RNNs anyway?
+
+Recurrent Neural Networks
+Sequences. Depending on your background you might be wondering: What makes Recurrent Networks so special? A glaring limitation of Vanilla Neural Networks (and also Convolutional Networks) is that their API is too constrained: they accept a fixed-sized vector as input (e.g. an image) and produce a fixed-sized vector as output (e.g. probabilities of different classes). Not only that: These models perform this mapping using a fixed amount of computational steps (e.g. the number of layers in the model). The core reason that recurrent nets are more exciting is that they allow us to operate over sequences of vectors: Sequences in the input, the output, or in the most general case both. A few examples may make this more concrete:
+
+
+Each rectangle is a vector and arrows represent functions (e.g. matrix multiply). Input vectors are in red, output vectors are in blue and green vectors hold the RNN's state (more on this soon). From left to right: (1) Vanilla mode of processing without RNN, from fixed-sized input to fixed-sized output (e.g. image classification). (2) Sequence output (e.g. image captioning takes an image and outputs a sentence of words). (3) Sequence input (e.g. sentiment analysis where a given sentence is classified as expressing positive or negative sentiment). (4) Sequence input and sequence output (e.g. Machine Translation: an RNN reads a sentence in English and then outputs a sentence in French). (5) Synced sequence input and output (e.g. video classification where we wish to label each frame of the video). Notice that in every case are no pre-specified constraints on the lengths sequences because the recurrent transformation (green) is fixed and can be applied as many times as we like.
+As you might expect, the sequence regime of operation is much more powerful compared to fixed networks that are doomed from the get-go by a fixed number of computational steps, and hence also much more appealing for those of us who aspire to build more intelligent systems. Moreover, as we’ll see in a bit, RNNs combine the input vector with their state vector with a fixed (but learned) function to produce a new state vector. This can in programming terms be interpreted as running a fixed program with certain inputs and some internal variables. Viewed this way, RNNs essentially describe programs. In fact, it is known that RNNs are Turing-Complete in the sense that they can to simulate arbitrary programs (with proper weights). But similar to universal approximation theorems for neural nets you shouldn’t read too much into this. In fact, forget I said anything.
+
+If training vanilla neural nets is optimization over functions, training recurrent nets is optimization over programs.
+
+Sequential processing in absence of sequences. You might be thinking that having sequences as inputs or outputs could be relatively rare, but an important point to realize is that even if your inputs/outputs are fixed vectors, it is still possible to use this powerful formalism to process them in a sequential manner. For instance, the figure below shows results from two very nice papers from DeepMind. On the left, an algorithm learns a recurrent network policy that steers its attention around an image; In particular, it learns to read out house numbers from left to right (Ba et al.). On the right, a recurrent network generates images of digits by learning to sequentially add color to a canvas (Gregor et al.):
+
+ 
+Left: RNN learns to read house numbers. Right: RNN learns to paint house numbers.
+The takeaway is that even if your data is not in form of sequences, you can still formulate and train powerful models that learn to process it sequentially. You’re learning stateful programs that process your fixed-sized data.
+
+RNN computation. So how do these things work? At the core, RNNs have a deceptively simple API: They accept an input vector x and give you an output vector y. However, crucially this output vector’s contents are influenced not only by the input you just fed in, but also on the entire history of inputs you’ve fed in in the past. Written as a class, the RNN’s API consists of a single step function:
+
+rnn = RNN()
+y = rnn.step(x) # x is an input vector, y is the RNN's output vector
+The RNN class has some internal state that it gets to update every time step is called. In the simplest case this state consists of a single hidden vector h. Here is an implementation of the step function in a Vanilla RNN:
+
+class RNN:
+  # ...
+  def step(self, x):
+    # update the hidden state
+    self.h = np.tanh(np.dot(self.W_hh, self.h) + np.dot(self.W_xh, x))
+    # compute the output vector
+    y = np.dot(self.W_hy, self.h)
+    return y
+The above specifies the forward pass of a vanilla RNN. This RNN’s parameters are the three matrices W_hh, W_xh, W_hy. The hidden state self.h is initialized with the zero vector. The np.tanh function implements a non-linearity that squashes the activations to the range [-1, 1]. Notice briefly how this works: There are two terms inside of the tanh: one is based on the previous hidden state and one is based on the current input. In numpy np.dot is matrix multiplication. The two intermediates interact with addition, and then get squashed by the tanh into the new state vector. If you’re more comfortable with math notation, we can also write the hidden state update as ht=tanh(Whhht−1+Wxhxt)
+, where tanh is applied elementwise.
+
+We initialize the matrices of the RNN with random numbers and the bulk of work during training goes into finding the matrices that give rise to desirable behavior, as measured with some loss function that expresses your preference to what kinds of outputs y you’d like to see in response to your input sequences x.
+
+Going deep. RNNs are neural networks and everything works monotonically better (if done right) if you put on your deep learning hat and start stacking models up like pancakes. For instance, we can form a 2-layer recurrent network as follows:
+
+y1 = rnn1.step(x)
+y = rnn2.step(y1)
+In other words we have two separate RNNs: One RNN is receiving the input vectors and the second RNN is receiving the output of the first RNN as its input. Except neither of these RNNs know or care - it’s all just vectors coming in and going out, and some gradients flowing through each module during backpropagation.
+
+Getting fancy. I’d like to briefly mention that in practice most of us use a slightly different formulation than what I presented above called a Long Short-Term Memory (LSTM) network. The LSTM is a particular type of recurrent network that works slightly better in practice, owing to its more powerful update equation and some appealing backpropagation dynamics. I won’t go into details, but everything I’ve said about RNNs stays exactly the same, except the mathematical form for computing the update (the line self.h = ... ) gets a little more complicated. From here on I will use the terms “RNN/LSTM” interchangeably but all experiments in this post use an LSTM.
+
+Character-Level Language Models
+Okay, so we have an idea about what RNNs are, why they are super exciting, and how they work. We’ll now ground this in a fun application: We’ll train RNN character-level language models. That is, we’ll give the RNN a huge chunk of text and ask it to model the probability distribution of the next character in the sequence given a sequence of previous characters. This will then allow us to generate new text one character at a time.
+
+As a working example, suppose we only had a vocabulary of four possible letters “helo”, and wanted to train an RNN on the training sequence “hello”. This training sequence is in fact a source of 4 separate training examples: 1. The probability of “e” should be likely given the context of “h”, 2. “l” should be likely in the context of “he”, 3. “l” should also be likely given the context of “hel”, and finally 4. “o” should be likely given the context of “hell”.
+
+Concretely, we will encode each character into a vector using 1-of-k encoding (i.e. all zero except for a single one at the index of the character in the vocabulary), and feed them into the RNN one at a time with the step function. We will then observe a sequence of 4-dimensional output vectors (one dimension per character), which we interpret as the confidence the RNN currently assigns to each character coming next in the sequence. Here’s a diagram:
+
+
+An example RNN with 4-dimensional input and output layers, and a hidden layer of 3 units (neurons). This diagram shows the activations in the forward pass when the RNN is fed the characters "hell" as input. The output layer contains confidences the RNN assigns for the next character (vocabulary is "h,e,l,o"); We want the green numbers to be high and red numbers to be low.
+For example, we see that in the first time step when the RNN saw the character “h” it assigned confidence of 1.0 to the next letter being “h”, 2.2 to letter “e”, -3.0 to “l”, and 4.1 to “o”. Since in our training data (the string “hello”) the next correct character is “e”, we would like to increase its confidence (green) and decrease the confidence of all other letters (red). Similarly, we have a desired target character at every one of the 4 time steps that we’d like the network to assign a greater confidence to. Since the RNN consists entirely of differentiable operations we can run the backpropagation algorithm (this is just a recursive application of the chain rule from calculus) to figure out in what direction we should adjust every one of its weights to increase the scores of the correct targets (green bold numbers). We can then perform a parameter update, which nudges every weight a tiny amount in this gradient direction. If we were to feed the same inputs to the RNN after the parameter update we would find that the scores of the correct characters (e.g. “e” in the first time step) would be slightly higher (e.g. 2.3 instead of 2.2), and the scores of incorrect characters would be slightly lower. We then repeat this process over and over many times until the network converges and its predictions are eventually consistent with the training data in that correct characters are always predicted next.
+
+A more technical explanation is that we use the standard Softmax classifier (also commonly referred to as the cross-entropy loss) on every output vector simultaneously. The RNN is trained with mini-batch Stochastic Gradient Descent and I like to use RMSProp or Adam (per-parameter adaptive learning rate methods) to stablilize the updates.
+
+Notice also that the first time the character “l” is input, the target is “l”, but the second time the target is “o”. The RNN therefore cannot rely on the input alone and must use its recurrent connection to keep track of the context to achieve this task.
+
+At test time, we feed a character into the RNN and get a distribution over what characters are likely to come next. We sample from this distribution, and feed it right back in to get the next letter. Repeat this process and you’re sampling text! Lets now train an RNN on different datasets and see what happens.
+
+To further clarify, for educational purposes I also wrote a minimal character-level RNN language model in Python/numpy. It is only about 100 lines long and hopefully it gives a concise, concrete and useful summary of the above if you’re better at reading code than text. We’ll now dive into example results, produced with the much more efficient Lua/Torch codebase.
+
+Fun with RNNs
+All 5 example character models below were trained with the code I’m releasing on Github. The input in each case is a single file with some text, and we’re training an RNN to predict the next character in the sequence.
+
+Paul Graham generator
+Lets first try a small dataset of English as a sanity check. My favorite fun dataset is the concatenation of Paul Graham’s essays. The basic idea is that there’s a lot of wisdom in these essays, but unfortunately Paul Graham is a relatively slow generator. Wouldn’t it be great if we could sample startup wisdom on demand? That’s where an RNN comes in.
+
+Concatenating all pg essays over the last ~5 years we get approximately 1MB text file, or about 1 million characters (this is considered a very small dataset by the way). Technical: Lets train a 2-layer LSTM with 512 hidden nodes (approx. 3.5 million parameters), and with dropout of 0.5 after each layer. We’ll train with batches of 100 examples and truncated backpropagation through time of length 100 characters. With these settings one batch on a TITAN Z GPU takes about 0.46 seconds (this can be cut in half with 50 character BPTT at negligible cost in performance). Without further ado, lets see a sample from the RNN:
+
+“The surprised in investors weren’t going to raise money. I’m not the company with the time there are all interesting quickly, don’t have to get off the same programmers. There’s a super-angel round fundraising, why do you can do. If you have a different physical investment are become in people who reduced in a startup with the way to argument the acquirer could see them just that you’re also the founders will part of users’ affords that and an alternation to the idea. [2] Don’t work at first member to see the way kids will seem in advance of a bad successful startup. And if you have to act the big company too.”
+
+Okay, clearly the above is unfortunately not going to replace Paul Graham anytime soon, but remember that the RNN had to learn English completely from scratch and with a small dataset (including where you put commas, apostrophes and spaces). I also like that it learns to support its own arguments (e.g. [2], above). Sometimes it says something that offers a glimmer of insight, such as “a company is a meeting to think to investors”. Here’s a link to 50K character sample if you’d like to see more.
+
+Temperature. We can also play with the temperature of the Softmax during sampling. Decreasing the temperature from 1 to some lower number (e.g. 0.5) makes the RNN more confident, but also more conservative in its samples. Conversely, higher temperatures will give more diversity but at cost of more mistakes (e.g. spelling mistakes, etc). In particular, setting temperature very near zero will give the most likely thing that Paul Graham might say:
+
+“is that they were all the same thing that was a startup is that they were all the same thing that was a startup is that they were all the same thing that was a startup is that they were all the same”
+
+looks like we’ve reached an infinite loop about startups.
+
+Shakespeare
+It looks like we can learn to spell English words. But how about if there is more structure and style in the data? To examine this I downloaded all the works of Shakespeare and concatenated them into a single (4.4MB) file. We can now afford to train a larger network, in this case lets try a 3-layer RNN with 512 hidden nodes on each layer. After we train the network for a few hours we obtain samples such as:
+
+PANDARUS:
+Alas, I think he shall be come approached and the day
+When little srain would be attain'd into being never fed,
+And who is but a chain and subjects of his death,
+I should not sleep.
+
+Second Senator:
+They are away this miseries, produced upon my soul,
+Breaking and strongly should be buried, when I perish
+The earth and thoughts of many states.
+
+DUKE VINCENTIO:
+Well, your wit is in the care of side and that.
+
+Second Lord:
+They would be ruled after this chamber, and
+my fair nues begun out of the fact, to be conveyed,
+Whose noble souls I'll have the heart of the wars.
+
+Clown:
+Come, sir, I will make did behold your worship.
+
+VIOLA:
+I'll drink it.
+Remember, all the RNN knows are characters, so in particular it samples both speaker’s names and the contents. Sometimes we also get relatively extented monologue passages, such as:
+
+VIOLA:
+Why, Salisbury must find his flesh and thought
+That which I am not aps, not a man and in fire,
+To show the reining of the raven and the wars
+To grace my hand reproach within, and not a fair are hand,
+That Caesar and my goodly father's world;
+When I was heaven of presence and our fleets,
+We spare with hours, but cut thy council I am great,
+Murdered and by thy master's ready there
+My power to give thee but so much as hell:
+Some service in the noble bondman here,
+Would show him to her wine.
+
+KING LEAR:
+O, if you were a feeble sight, the courtesy of your law,
+Your sight and several breath, will wear the gods
+With his heads, and my hands are wonder'd at the deeds,
+So drop upon your lordship's head, and your opinion
+Shall be against your honour.
+I can barely recognize these samples from actual Shakespeare :) If you like Shakespeare, you might appreciate this 100,000 character sample. Of course, you can also generate an infinite amount of your own samples at different temperatures with the provided code.
+
+Wikipedia
+We saw that the LSTM can learn to spell words and copy general syntactic structures. Lets further increase the difficulty and train on structured markdown. In particular, lets take the Hutter Prize 100MB dataset of raw Wikipedia and train an LSTM. Following Graves et al., I used the first 96MB for training, the rest for validation and ran a few models overnight. We can now sample Wikipedia articles! Below are a few fun excerpts. First, some basic markdown output:
+
+Naturalism and decision for the majority of Arab countries' capitalide was grounded
+by the Irish language by [[John Clair]], [[An Imperial Japanese Revolt]], associated 
+with Guangzham's sovereignty. His generals were the powerful ruler of the Portugal 
+in the [[Protestant Immineners]], which could be said to be directly in Cantonese 
+Communication, which followed a ceremony and set inspired prison, training. The 
+emperor travelled back to [[Antioch, Perth, October 25|21]] to note, the Kingdom 
+of Costa Rica, unsuccessful fashioned the [[Thrales]], [[Cynth's Dajoard]], known 
+in western [[Scotland]], near Italy to the conquest of India with the conflict. 
+Copyright was the succession of independence in the slop of Syrian influence that 
+was a famous German movement based on a more popular servicious, non-doctrinal 
+and sexual power post. Many governments recognize the military housing of the 
+[[Civil Liberalization and Infantry Resolution 265 National Party in Hungary]], 
+that is sympathetic to be to the [[Punjab Resolution]]
+(PJS)[http://www.humah.yahoo.com/guardian.
+cfm/7754800786d17551963s89.htm Official economics Adjoint for the Nazism, Montgomery 
+was swear to advance to the resources for those Socialism's rule, 
+was starting to signing a major tripad of aid exile.]]
+In case you were wondering, the yahoo url above doesn’t actually exist, the model just hallucinated it. Also, note that the model learns to open and close the parenthesis correctly. There’s also quite a lot of structured markdown that the model learns, for example sometimes it creates headings, lists, etc.:
+
+{ { cite journal | id=Cerling Nonforest Department|format=Newlymeslated|none } }
+''www.e-complete''.
+
+'''See also''': [[List of ethical consent processing]]
+
+== See also ==
+*[[Iender dome of the ED]]
+*[[Anti-autism]]
+
+===[[Religion|Religion]]===
+*[[French Writings]]
+*[[Maria]]
+*[[Revelation]]
+*[[Mount Agamul]]
+
+== External links==
+* [http://www.biblegateway.nih.gov/entrepre/ Website of the World Festival. The labour of India-county defeats at the Ripper of California Road.]
+
+==External links==
+* [http://www.romanology.com/ Constitution of the Netherlands and Hispanic Competition for Bilabial and Commonwealth Industry (Republican Constitution of the Extent of the Netherlands)]
+
+Sometimes the model snaps into a mode of generating random but valid XML:
+
+<page>
+  <title>Antichrist</title>
+  <id>865</id>
+  <revision>
+    <id>15900676</id>
+    <timestamp>2002-08-03T18:14:12Z</timestamp>
+    <contributor>
+      <username>Paris</username>
+      <id>23</id>
+    </contributor>
+    <minor />
+    <comment>Automated conversion</comment>
+    <text xml:space="preserve">#REDIRECT [[Christianity]]</text>
+  </revision>
+</page>
+The model completely makes up the timestamp, id, and so on. Also, note that it closes the correct tags appropriately and in the correct nested order. Here are 100,000 characters of sampled wikipedia if you’re interested to see more.
+
+Algebraic Geometry (Latex)
+The results above suggest that the model is actually quite good at learning complex syntactic structures. Impressed by these results, my labmate (Justin Johnson) and I decided to push even further into structured territories and got a hold of this book on algebraic stacks/geometry. We downloaded the raw Latex source file (a 16MB file) and trained a multilayer LSTM. Amazingly, the resulting sampled Latex almost compiles. We had to step in and fix a few issues manually but then you get plausible looking math, it’s quite astonishing:
+
+
+Sampled (fake) algebraic geometry. Here's the actual pdf.
+Here’s another sample:
+
+
+More hallucinated algebraic geometry. Nice try on the diagram (right).
+As you can see above, sometimes the model tries to generate latex diagrams, but clearly it hasn’t really figured them out. I also like the part where it chooses to skip a proof (“Proof omitted.”, top left). Of course, keep in mind that latex has a relatively difficult structured syntactic format that I haven’t even fully mastered myself. For instance, here is a raw sample from the model (unedited):
+
+\begin{proof}
+We may assume that $\mathcal{I}$ is an abelian sheaf on $\mathcal{C}$.
+\item Given a morphism $\Delta : \mathcal{F} \to \mathcal{I}$
+is an injective and let $\mathfrak q$ be an abelian sheaf on $X$.
+Let $\mathcal{F}$ be a fibered complex. Let $\mathcal{F}$ be a category.
+\begin{enumerate}
+\item \hyperref[setain-construction-phantom]{Lemma}
+\label{lemma-characterize-quasi-finite}
+Let $\mathcal{F}$ be an abelian quasi-coherent sheaf on $\mathcal{C}$.
+Let $\mathcal{F}$ be a coherent $\mathcal{O}_X$-module. Then
+$\mathcal{F}$ is an abelian catenary over $\mathcal{C}$.
+\item The following are equivalent
+\begin{enumerate}
+\item $\mathcal{F}$ is an $\mathcal{O}_X$-module.
+\end{lemma}
+This sample from a relatively decent model illustrates a few common mistakes. For example, the model opens a \begin{proof} environment but then ends it with a \end{lemma}. This is an example of a problem we’d have to fix manually, and is likely due to the fact that the dependency is too long-term: By the time the model is done with the proof it has forgotten whether it was doing a proof or a lemma. Similarly, it opens an \begin{enumerate} but then forgets to close it. We observed that these became less common with larger/better models, but nonetheless, these are the kinds of mistakes that come up.
+
+Linux Source Code
+I wanted to push structured data to its limit, so for the final challenge I decided to use code. In particular, I took all the source and header files found in the Linux repo on Github, concatenated all of them in a single giant file (474MB of C code) (I was originally going to train only on the kernel but that by itself is only ~16MB). Then I trained several as-large-as-fits-on-my-GPU 3-layer LSTMs over a period of a few days. These models have about 10 million parameters, which is still on the lower end for RNN models. The results are superfun:
+
+/*
+ * Increment the size file of the new incorrect UI_FILTER group information
+ * of the size generatively.
+ */
+static int indicate_policy(void)
+{
+  int error;
+  if (fd == MARN_EPT) {
+    /*
+     * The kernel blank will coeld it to userspace.
+     */
+    if (ss->segment < mem_total)
+      unblock_graph_and_set_blocked();
+    else
+      ret = 1;
+    goto bail;
+  }
+  segaddr = in_SB(in.addr);
+  selector = seg / 16;
+  setup_works = true;
+  for (i = 0; i < blocks; i++) {
+    seq = buf[i++];
+    bpf = bd->bd.next + i * search;
+    if (fd) {
+      current = blocked;
+    }
+  }
+  rw->name = "Getjbbregs";
+  bprm_self_clearl(&iv->version);
+  regs->new = blocks[(BPF_STATS << info->historidac)] | PFMR_CLOBATHINC_SECONDS << 12;
+  return segtable;
+}
+The code looks really quite great overall. Of course, I don’t think it compiles but when you scroll through the generate code it feels very much like a giant C code base. Notice that the RNN peppers its code with comments here and there at random. It is also very good at making very few syntactic errors. For example, it uses strings properly, pointer notation, etc. It also opens and closes brackets {[ correctly and learns to indent its code very well. A common error is that it can’t keep track of variable names: It often uses undefined variables (e.g. rw above), declares variables it never uses (e.g. int error), or returns non-existing variables. Lets see a few more examples. Here’s another snippet that shows a wider array of operations that the RNN learns:
+
+/*
+ * If this error is set, we will need anything right after that BSD.
+ */
+static void action_new_function(struct s_stat_info *wb)
+{
+  unsigned long flags;
+  int lel_idx_bit = e->edd, *sys & ~((unsigned long) *FIRST_COMPAT);
+  buf[0] = 0xFFFFFFFF & (bit << 4);
+  min(inc, slist->bytes);
+  printk(KERN_WARNING "Memory allocated %02x/%02x, "
+    "original MLL instead\n"),
+    min(min(multi_run - s->len, max) * num_data_in),
+    frame_pos, sz + first_seg);
+  div_u64_w(val, inb_p);
+  spin_unlock(&disk->queue_lock);
+  mutex_unlock(&s->sock->mutex);
+  mutex_unlock(&func->mutex);
+  return disassemble(info->pending_bh);
+}
+
+static void num_serial_settings(struct tty_struct *tty)
+{
+  if (tty == tty)
+    disable_single_st_p(dev);
+  pci_disable_spool(port);
+  return 0;
+}
+
+static void do_command(struct seq_file *m, void *v)
+{
+  int column = 32 << (cmd[2] & 0x80);
+  if (state)
+    cmd = (int)(int_state ^ (in_8(&ch->ch_flags) & Cmd) ? 2 : 1);
+  else
+    seq = 1;
+  for (i = 0; i < 16; i++) {
+    if (k & (1 << 1))
+      pipe = (in_use & UMXTHREAD_UNCCA) +
+        ((count & 0x00000000fffffff8) & 0x000000f) << 8;
+    if (count == 0)
+      sub(pid, ppc_md.kexec_handle, 0x20000000);
+    pipe_set_bytes(i, 0);
+  }
+  /* Free our user pages pointer to place camera if all dash */
+  subsystem_info = &of_changes[PAGE_SIZE];
+  rek_controls(offset, idx, &soffset);
+  /* Now we want to deliberately put it to device */
+  control_check_polarity(&context, val, 0);
+  for (i = 0; i < COUNTER; i++)
+    seq_puts(s, "policy ");
+}
+Notice that in the second function the model compares tty == tty, which is vacuously true. On the other hand, at least the variable tty exists in the scope this time! In the last function, notice that the code does not return anything, which happens to be correct since the function signature is void. However, the first two functions were also declared void and did return values. This is again a form of a common mistake due to long-term interactions.
+
+Sometimes the model decides that it’s time to sample a new file. This is usually a very amusing part: The model first recites the GNU license character by character, samples a few includes, generates some macros and then dives into the code:
+
+/*
+ *  Copyright (c) 2006-2010, Intel Mobile Communications.  All rights reserved.
+ *
+ *   This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ *
+ *        This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *
+ *  GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *    along with this program; if not, write to the Free Software Foundation,
+ *  Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
+
+#include <linux/kexec.h>
+#include <linux/errno.h>
+#include <linux/io.h>
+#include <linux/platform_device.h>
+#include <linux/multi.h>
+#include <linux/ckevent.h>
+
+#include <asm/io.h>
+#include <asm/prom.h>
+#include <asm/e820.h>
+#include <asm/system_info.h>
+#include <asm/setew.h>
+#include <asm/pgproto.h>
+
+#define REG_PG    vesa_slot_addr_pack
+#define PFM_NOCOMP  AFSR(0, load)
+#define STACK_DDR(type)     (func)
+
+#define SWAP_ALLOCATE(nr)     (e)
+#define emulate_sigs()  arch_get_unaligned_child()
+#define access_rw(TST)  asm volatile("movd %%esp, %0, %3" : : "r" (0));   \
+  if (__type & DO_READ)
+
+static void stat_PC_SEC __read_mostly offsetof(struct seq_argsqueue, \
+          pC>[1]);
+
+static void
+os_prefix(unsigned long sys)
+{
+#ifdef CONFIG_PREEMPT
+  PUT_PARAM_RAID(2, sel) = get_state_state();
+  set_pid_sum((unsigned long)state, current_state_str(),
+           (unsigned long)-1->lr_full; low;
+}
+There are too many fun parts to cover- I could probably write an entire blog post on just this part. I’ll cut it short for now, but here is 1MB of sampled Linux code for your viewing pleasure.
+
+Generating Baby Names
+Lets try one more for fun. Lets feed the RNN a large text file that contains 8000 baby names listed out, one per line (names obtained from here). We can feed this to the RNN and then generate new names! Here are some example names, only showing the ones that do not occur in the training data (90% don’t):
+
+Rudi Levette Berice Lussa Hany Mareanne Chrestina Carissy Marylen Hammine Janye Marlise Jacacrie Hendred Romand Charienna Nenotto Ette Dorane Wallen Marly Darine Salina Elvyn Ersia Maralena Minoria Ellia Charmin Antley Nerille Chelon Walmor Evena Jeryly Stachon Charisa Allisa Anatha Cathanie Geetra Alexie Jerin Cassen Herbett Cossie Velen Daurenge Robester Shermond Terisa Licia Roselen Ferine Jayn Lusine Charyanne Sales Sanny Resa Wallon Martine Merus Jelen Candica Wallin Tel Rachene Tarine Ozila Ketia Shanne Arnande Karella Roselina Alessia Chasty Deland Berther Geamar Jackein Mellisand Sagdy Nenc Lessie Rasemy Guen Gavi Milea Anneda Margoris Janin Rodelin Zeanna Elyne Janah Ferzina Susta Pey Castina
+
+You can see many more here. Some of my favorites include “Baby” (haha), “Killie”, “Char”, “R”, “More”, “Mars”, “Hi”, “Saddie”, “With” and “Ahbort”. Well that was fun.﻿ Of course, you can imagine this being quite useful inspiration when writing a novel, or naming a new startup :)
+
+Understanding what’s going on
+We saw that the results at the end of training can be impressive, but how does any of this work? Lets run two quick experiments to briefly peek under the hood.
+
+The evolution of samples while training
+First, it’s fun to look at how the sampled text evolves while the model trains. For example, I trained an LSTM of Leo Tolstoy’s War and Peace and then generated samples every 100 iterations of training. At iteration 100 the model samples random jumbles:
+
+tyntd-iafhatawiaoihrdemot  lytdws  e ,tfti, astai f ogoh eoase rrranbyne 'nhthnee e 
+plia tklrgd t o idoe ns,smtt   h ne etie h,hregtrs nigtike,aoaenns lng
+However, notice that at least it is starting to get an idea about words separated by spaces. Except sometimes it inserts two spaces. It also doesn’t know that comma is amost always followed by a space. At 300 iterations we see that the model starts to get an idea about quotes and periods:
+
+"Tmont thithey" fomesscerliund
+Keushey. Thom here
+sheulke, anmerenith ol sivh I lalterthend Bleipile shuwy fil on aseterlome
+coaniogennc Phe lism thond hon at. MeiDimorotion in ther thize."
+The words are now also separated with spaces and the model starts to get the idea about periods at the end of a sentence. At iteration 500:
+
+we counter. He stutn co des. His stanted out one ofler that concossions and was 
+to gearang reay Jotrets and with fre colt otf paitt thin wall. Which das stimn 
+the model has now learned to spell the shortest and most common words such as “we”, “He”, “His”, “Which”, “and”, etc. At iteration 700 we’re starting to see more and more English-like text emerge:
+
+Aftair fall unsuch that the hall for Prince Velzonski's that me of
+her hearly, and behs to so arwage fiving were to it beloge, pavu say falling misfort 
+how, and Gogition is so overelical and ofter.
+At iteration 1200 we’re now seeing use of quotations and question/exclamation marks. Longer words have now been learned as well:
+
+"Kite vouch!" he repeated by her
+door. "But I would be done and quarts, feeling, then, son is people...."
+Until at last we start to get properly spelled words, quotations, names, and so on by about iteration 2000:
+
+"Why do what that day," replied Natasha, and wishing to himself the fact the
+princess, Princess Mary was easier, fed in had oftened him.
+Pierre aking his soul came to the packs and drove up his father-in-law women.
+The picture that emerges is that the model first discovers the general word-space structure and then rapidly starts to learn the words; First starting with the short words and then eventually the longer ones. Topics and themes that span multiple words (and in general longer-term dependencies) start to emerge only much later.
+
+Visualizing the predictions and the “neuron” firings in the RNN
+Another fun visualization is to look at the predicted distributions over characters. In the visualizations below we feed a Wikipedia RNN model character data from the validation set (shown along the blue/green rows) and under every character we visualize (in red) the top 5 guesses that the model assigns for the next character. The guesses are colored by their probability (so dark red = judged as very likely, white = not very likely). For example, notice that there are stretches of characters where the model is extremely confident about the next letter (e.g., the model is very confident about characters during the http://www. sequence).
+
+The input character sequence (blue/green) is colored based on the firing of a randomly chosen neuron in the hidden representation of the RNN. Think about it as green = very excited and blue = not very excited (for those familiar with details of LSTMs, these are values between [-1,1] in the hidden state vector, which is just the gated and tanh’d LSTM cell state). Intuitively, this is visualizing the firing rate of some neuron in the “brain” of the RNN while it reads the input sequence. Different neurons might be looking for different patterns; Below we’ll look at 4 different ones that I found and thought were interesting or interpretable (many also aren’t):
+
+
+The neuron highlighted in this image seems to get very excited about URLs and turns off outside of the URLs. The LSTM is likely using this neuron to remember if it is inside a URL or not.
+
+The highlighted neuron here gets very excited when the RNN is inside the [[ ]] markdown environment and turns off outside of it. Interestingly, the neuron can't turn on right after it sees the character "[", it must wait for the second "[" and then activate. This task of counting whether the model has seen one or two "[" is likely done with a different neuron.
+
+Here we see a neuron that varies seemingly linearly across the [[ ]] environment. In other words its activation is giving the RNN a time-aligned coordinate system across the [[ ]] scope. The RNN can use this information to make different characters more or less likely depending on how early/late it is in the [[ ]] scope (perhaps?).
+
+Here is another neuron that has very local behavior: it is relatively silent but sharply turns off right after the first "w" in the "www" sequence. The RNN might be using this neuron to count up how far in the "www" sequence it is, so that it can know whether it should emit another "w", or if it should start the URL.
+Of course, a lot of these conclusions are slightly hand-wavy as the hidden state of the RNN is a huge, high-dimensional and largely distributed representation. These visualizations were produced with custom HTML/CSS/Javascript, you can see a sketch of what’s involved here if you’d like to create something similar.
+
+We can also condense this visualization by excluding the most likely predictions and only visualize the text, colored by activations of a cell. We can see that in addition to a large portion of cells that do not do anything interpretible, about 5% of them turn out to have learned quite interesting and interpretible algorithms:
+
+ 
+Again, what is beautiful about this is that we didn’t have to hardcode at any point that if you’re trying to predict the next character it might, for example, be useful to keep track of whether or not you are currently inside or outside of quote. We just trained the LSTM on raw data and it decided that this is a useful quantitity to keep track of. In other words one of its cells gradually tuned itself during training to become a quote detection cell, since this helps it better perform the final task. This is one of the cleanest and most compelling examples of where the power in Deep Learning models (and more generally end-to-end training) is coming from.
+
+Source Code
+I hope I’ve convinced you that training character-level language models is a very fun exercise. You can train your own models using the char-rnn code I released on Github (under MIT license). It takes one large text file and trains a character-level model that you can then sample from. Also, it helps if you have a GPU or otherwise training on CPU will be about a factor of 10x slower. In any case, if you end up training on some data and getting fun results let me know! And if you get lost in the Torch/Lua codebase remember that all it is is just a more fancy version of this 100-line gist.
+
+Brief digression. The code is written in Torch 7, which has recently become my favorite deep learning framework. I’ve only started working with Torch/LUA over the last few months and it hasn’t been easy (I spent a good amount of time digging through the raw Torch code on Github and asking questions on their gitter to get things done), but once you get a hang of things it offers a lot of flexibility and speed. I’ve also worked with Caffe and Theano in the past and I believe Torch, while not perfect, gets its levels of abstraction and philosophy right better than others. In my view the desirable features of an effective framework are:
+
+CPU/GPU transparent Tensor library with a lot of functionality (slicing, array/matrix operations, etc. )
+An entirely separate code base in a scripting language (ideally Python) that operates over Tensors and implements all Deep Learning stuff (forward/backward, computation graphs, etc)
+It should be possible to easily share pretrained models (Caffe does this well, others don’t), and crucially
+NO compilation step (or at least not as currently done in Theano). The trend in Deep Learning is towards larger, more complex networks that are are time-unrolled in complex graphs. It is critical that these do not compile for a long time or development time greatly suffers. Second, by compiling one gives up interpretability and the ability to log/debug effectively. If there is an option to compile the graph once it has been developed for efficiency in prod that’s fine.
+Further Reading
+Before the end of the post I also wanted to position RNNs in a wider context and provide a sketch of the current research directions. RNNs have recently generated a significant amount of buzz and excitement in the field of Deep Learning. Similar to Convolutional Networks they have been around for decades but their full potential has only recently started to get widely recognized, in large part due to our growing computational resources. Here’s a brief sketch of a few recent developments (definitely not complete list, and a lot of this work draws from research back to 1990s, see related work sections):
+
+In the domain of NLP/Speech, RNNs transcribe speech to text, perform machine translation, generate handwritten text, and of course, they have been used as powerful language models (Sutskever et al.) (Graves) (Mikolov et al.) (both on the level of characters and words). Currently it seems that word-level models work better than character-level models, but this is surely a temporary thing.
+
+Computer Vision. RNNs are also quickly becoming pervasive in Computer Vision. For example, we’re seeing RNNs in frame-level video classification, image captioning (also including my own work and many others), video captioning and very recently visual question answering. My personal favorite RNNs in Computer Vision paper is Recurrent Models of Visual Attention, both due to its high-level direction (sequential processing of images with glances) and the low-level modeling (REINFORCE learning rule that is a special case of policy gradient methods in Reinforcement Learning, which allows one to train models that perform non-differentiable computation (taking glances around the image in this case)). I’m confident that this type of hybrid model that consists of a blend of CNN for raw perception coupled with an RNN glance policy on top will become pervasive in perception, especially for more complex tasks that go beyond classifying some objects in plain view.
+
+Inductive Reasoning, Memories and Attention. Another extremely exciting direction of research is oriented towards addressing the limitations of vanilla recurrent networks. One problem is that RNNs are not inductive: They memorize sequences extremely well, but they don’t necessarily always show convincing signs of generalizing in the correct way (I’ll provide pointers in a bit that make this more concrete). A second issue is they unnecessarily couple their representation size to the amount of computation per step. For instance, if you double the size of the hidden state vector you’d quadruple the amount of FLOPS at each step due to the matrix multiplication. Ideally, we’d like to maintain a huge representation/memory (e.g. containing all of Wikipedia or many intermediate state variables), while maintaining the ability to keep computation per time step fixed.
+
+The first convincing example of moving towards these directions was developed in DeepMind’s Neural Turing Machines paper. This paper sketched a path towards models that can perform read/write operations between large, external memory arrays and a smaller set of memory registers (think of these as our working memory) where the computation happens. Crucially, the NTM paper also featured very interesting memory addressing mechanisms that were implemented with a (soft, and fully-differentiable) attention model. The concept of soft attention has turned out to be a powerful modeling feature and was also featured in Neural Machine Translation by Jointly Learning to Align and Translate for Machine Translation and Memory Networks for (toy) Question Answering. In fact, I’d go as far as to say that
+
+The concept of attention is the most interesting recent architectural innovation in neural networks.
+
+Now, I don’t want to dive into too many details but a soft attention scheme for memory addressing is convenient because it keeps the model fully-differentiable, but unfortunately one sacrifices efficiency because everything that can be attended to is attended to (but softly). Think of this as declaring a pointer in C that doesn’t point to a specific address but instead defines an entire distribution over all addresses in the entire memory, and dereferencing the pointer returns a weighted sum of the pointed content (that would be an expensive operation!). This has motivated multiple authors to swap soft attention models for hard attention where one samples a particular chunk of memory to attend to (e.g. a read/write action for some memory cell instead of reading/writing from all cells to some degree). This model is significantly more philosophically appealing, scalable and efficient, but unfortunately it is also non-differentiable. This then calls for use of techniques from the Reinforcement Learning literature (e.g. REINFORCE) where people are perfectly used to the concept of non-differentiable interactions. This is very much ongoing work but these hard attention models have been explored, for example, in Inferring Algorithmic Patterns with Stack-Augmented Recurrent Nets, Reinforcement Learning Neural Turing Machines, and Show Attend and Tell.
+
+People. If you’d like to read up on RNNs I recommend theses from Alex Graves, Ilya Sutskever and Tomas Mikolov. For more about REINFORCE and more generally Reinforcement Learning and policy gradient methods (which REINFORCE is a special case of) David Silver’s class, or one of Pieter Abbeel’s classes.
+
+Code. If you’d like to play with training RNNs I hear good things about keras or passage for Theano, the code released with this post for Torch, or this gist for raw numpy code I wrote a while ago that implements an efficient, batched LSTM forward and backward pass. You can also have a look at my numpy-based NeuralTalk which uses an RNN/LSTM to caption images, or maybe this Caffe implementation by Jeff Donahue.
+
+Conclusion
+We’ve learned about RNNs, how they work, why they have become a big deal, we’ve trained an RNN character-level language model on several fun datasets, and we’ve seen where RNNs are going. You can confidently expect a large amount of innovation in the space of RNNs, and I believe they will become a pervasive and critical component to intelligent systems.
+
+Lastly, to add some meta to this post, I trained an RNN on the source file of this blog post. Unfortunately, at about 46K characters I haven’t written enough data to properly feed the RNN, but the returned sample (generated with low temperature to get a more typical sample) is:
+
+I've the RNN with and works, but the computed with program of the 
+RNN with and the computed of the RNN with with and the code
+Yes, the post was about RNN and how well it works, so clearly this works :). See you next time!
+
+EDIT (extra links):
+
+Videos:
+
+I gave a talk on this work at the London Deep Learning meetup (video).
+Discussions:
+
+HN discussion
+Reddit discussion on r/machinelearning
+Reddit discussion on r/programming
+Replies:
+
+Yoav Goldberg compared these RNN results to n-gram maximum likelihood (counting) baseline
+@nylk trained char-rnn on cooking recipes. They look great!
+@MrChrisJohnson trained char-rnn on Eminem lyrics and then synthesized a rap song with robotic voice reading it out. Hilarious :)
+@samim trained char-rnn on Obama Speeches. They look fun!
+João Felipe trained char-rnn irish folk music and sampled music
+Bob Sturm also trained char-rnn on music in ABC notation
+RNN Bible bot by Maximilien
+Learning Holiness learning the Bible
+Terminal.com snapshot that has char-rnn set up and ready to go in a browser-based virtual machine (thanks @samim)
+
+Andrej Karpathy blog
+ karpathy
+ karpathy
+Musings of a Computer Scientist.Andrej Karpathy blog
+About
+Breaking Linear Classifiers on ImageNet
+Mar 30, 2015
+
+You’ve probably heard that Convolutional Networks work very well in practice and across a wide range of visual recognition problems. You may have also read articles and papers that claim to reach a near “human-level performance”. There are all kinds of caveats to that (e.g. see my G+ post on Human Accuracy is not a point, it lives on a tradeoff curve), but that is not the point of this post. I do think that these systems now work extremely well across many visual recognition tasks, especially ones that can be posed as simple classification.
+
+Yet, a second group of seemingly baffling results has emerged that brings up an apparent contradiction. I’m referring to several people who have noticed that it is possible to take an image that a state-of-the-art Convolutional Network thinks is one class (e.g. “panda”), and it is possible to change it almost imperceptibly to the human eye in such a way that the Convolutional Network suddenly classifies the image as any other class of choice (e.g. “gibbon”). We say that we break, or fool ConvNets. See the image below for an illustration:
+
+
+Figure from Explaining and Harnessing Adversarial Examples by Goodfellow et al.
+This topic has recently gained attention starting with Intriguing properties of neural networks by Szegedy et al. last year. They had a very similar set of images:
+
+
+Take a correctly classified image (left image in both columns), and add a tiny distortion (middle) to fool the ConvNet with the resulting image (right).
+And a set of very closely related results was later followed by Deep Neural Networks are Easily Fooled: High Confidence Predictions for Unrecognizable Images by Nguyen et al. Instead of starting with correctly-classified images and fooling the ConvNet, they had many more examples of performing the same process starting from noise (and hence making the ConvNet confidently classify an incomprehensible noise pattern as some class), or evolving new funny-looking images that the ConvNet is slightly too certain about:
+
+ 
+These images are classified with >99.6% confidence as the shown class by a Convolutional Network.
+I should make the point quickly that these results are not completely new to Computer Vision, and that some have observed the same problems even with our older features, e.g. HOG features. See Exploring the Representation Capabilities of the HOG Descriptor for details.
+
+The conclusion seems to be that we can take any arbitrary image and classify it as whatever class we want by adding tiny, imperceptible noise patterns. Worse, it was found that a reasonable fraction of fooling images generalize across different Convolutional Networks, so this isn’t some kind of fragile property of the new image or some overfitting property of the model. There’s something more general about the type of introduced noise that seems to fool many other models. In some sense, it is much more accurate to speak about fooling subspaces rather than fooling images. The latter erroneously makes them seem like tiny points in the super-high-dimensional image space, perhaps similar to rational numbers along the real numbers, when instead they are better thought of as entire intervals. Of course, this work raises security concerns because an adversary could conceivably generate a fooling image of any class on their own computer and upload it to some service with a malicious intent, with a non-zero probability of it fooling the server-side model (e.g. circumventing racy filters).
+
+What is going on?
+
+These results are interesting and worrying, but they have also led to a good amount of confusion among laymen. The most important point of this entire post is the following:
+
+These results are not specific to images, ConvNets, and they are also not a “flaw” in Deep Learning. A lot of these results were reported with ConvNets running on images because pictures are fun to look at and ConvNets are state-of-the-art, but in fact the core flaw extends to many other domains (e.g. speech recognition systems), and most importantly, also to simple, shallow, good old-fashioned Linear Classifiers (Softmax classifier, or Linear Support Vector Machines, etc.). This was pointed out and articulated in Explaining and Harnessing Adversarial Examples by Goodfellow et al. We’ll carry out a few experiments very similar to the ones presented in this paper, and see that it is in fact this linear nature that is problematic. And because Deep Learning models use linear functions to build up the architecture, they inherit their flaw. However, Deep Learning by itself is not the cause of the issue. In fact, Deep Learning offers tangible hope for a solution, since we can use all the wiggle of composed functions to design more resistant architectures or objectives.
+
+How fooling methods work
+ConvNets express a differentiable function from the pixel values to class scores. For example, a ConvNet might take a 227x227 image and transforms these ~100,000 numbers through a wiggly function (parameterized by several million parameters) to 1000 numbers that we interpret as the confidences for 1000 classes (e.g. the classes of ImageNet).
+
+
+This ConvNet takes the image of a banana and applies a function to it to transform it to class scores (here 4 classes are shown). The function consists of several rounds of convolutions where the filter entries are parameters, and a few matrix multiplications, where the elements of the matrices are parameters. A typical ConvNet might have ~100 million parameters.
+We train a ConvNet with repeated process of sampling data, calculating the parameter gradients and performing a parameter update. That is, suppose we feed the ConvNet an image of a banana and compute the 1000 scores for the classes that the ConvNet assigns to this image. We then and ask the following question for every single parameter in the model:
+
+Normal ConvNet training: “What happens to the score of the correct class when I wiggle this parameter?”
+
+This wiggle influence, of course, is just the gradient. For example, some parameter in some filter in some layer of the ConvNet might get the gradient of -3.0 computed during backpropagation. That means that increasing this parameter by a tiny amount, e.g. 0.0001, would have a negative influence on the banana score (due to the negative sign); In this case, we’d expect the banana score to decrease by approximately 0.0003. Normally we take this gradient and use it to perform a parameter update, which wiggles every parameter in the model a tiny amount in the correct direction, to increase the banana score. These parameter updates hence work in concert to slightly increase the score of the banana class for that one banana image (e.g. the banana score could go up from 30% to 34% or something). We then repeat this over and over on all images in the training data.
+
+Notice how this worked: we held the input image fixed, and we wiggled the model parameters to increase the score of whatever class we wanted (e.g. banana class). It turns out that we can easily flip this process around to create fooling images. (In practice in fact, absolutely no changes to a ConvNet code base are required.) That is, we will hold the model parameters fixed, and instead we’re computing the gradient of all pixels in the input image on any class we might desire. For example, we can ask:
+
+Creating fooling images: “What happens to the score of (whatever class you want) when I wiggle this pixel?”
+
+We compute the gradient just as before with backpropagation, and then we can perform an image update instead of a parameter update, with the end result being that we increase the score of whatever class we want. E.g. we can take the banana image and wiggle every pixel according to the gradient of that image on the cat class. This would change the image a tiny amount, but the score of cat would now increase. Somewhat unintuitively, it turns out that you don’t have to change the image too much to toggle the image from being classified correctly as a banana, to being classified as anything else (e.g. cat).
+
+In short, to create a fooling image we start from whatever image we want (an actual image, or even a noise pattern), and then use backpropagation to compute the gradient of the image pixels on any class score, and nudge it along. We may, but do not have to, repeat the process a few times. You can interpret backpropagation in this setting as using dynamic programming to compute the most damaging local perturbation to the input. Note that this process is very efficient and takes negligible time if you have access to the parameters of the ConvNet (backprop is fast), but it is possible to do this even if you do not have access to the parameters but only to the class scores at the end. In this case, it is possible to compute the data gradient numerically, or to to use other local stochastic search strategies, etc. Note that due to the latter approach, even non-differentiable classifiers (e.g. Random Forests) are not safe (but I haven’t seen anyone empirically confirm this yet).
+
+Fooling a Linear Classifier on ImageNet
+As I mentioned before (and as described in more detail in Goodfellow et al.), it is the use of linear functions that makes our models susceptible for an attack. ConvNets, of course, do not express a linear function from images to class scores; They are a complex Deep Learning model that expresses a highly non-linear function. However, the components that make up a ConvNet are linear: Convolution of a filter with its input is a linear operation (we are sliding a filter through the input and computing dot products - a linear operation), and matrix multiplications are also a linear function.
+
+So here’s a fun experiment we’ll do. Lets forget about ConvNets - they are a distracting overkill as far as the core flaw goes. Instead, lets fool a linear classifier and lets also keep with the theme of breaking models on images because they are fun to look at.
+
+Here is the setup:
+
+Take 1.2 million images in ImageNet
+Resize them to 64x64 (full-sized images would train longer)
+use Caffe to train a Linear Classifier (e.g. Softmax). In other words we’re going straight from data to the classifier with a single fully-connected layer.
+Digression: Technical fun parts. The fun part in actually doing this is that the standard AlexNetty ConvNet hyperparameters are of course completely inadequate. For example, normally you’d use weight decay of 0.0005 or so and learning rate of 0.01, and gaussian initialization drawn from a gaussian of 0.01 std. If you’ve trained linear classifiers before on this type of high-dimensional input (64x64x3 ~= 12K numbers), you’ll know that your learning rate will probably have to be much lower, the regularization much larger, and initialization of 0.01 std will probably be inadequate. Indeed, starting Caffe training with default hyperparameters gives a starting loss of about 80, which right away tells you that the initialization is completely out of whack (initial ImageNet loss should be ballpark 7.0, which is -log(1/1000)). I scaled it down to 0.0001 std for Gaussian init which gives sensible starting loss. But then the loss right away explodes which tells you that the learning rate is way too high - I had to scale it all the way down to about 1e-7. Lastly, a weight decay of 0.0005 will give almost negligible regularization loss with 12K inputs - I had to scale it up to 100 to start getting reasonably-looking weights that aren’t super-overfitted noise blobs. It’s fun being a Neural Networks practitioner.
+
+A linear classifier over image pixels implies that every class score is computed as a dot product between all the image pixels (stretched as a large column) and a learnable weight vector, one for each class. With input images of size 64x64x3 and 1000 ImageNet classes we therefore have 64x64x3x1000 = 12.3 million weights (beefy linear model!), and 1000 biases. Training these parameters on ImageNet with a K40 GPU takes only a few tens of minutes. We can then visualize each of the learned weights by reshaping them as images:
+
+
+Example linear classifiers for a few ImageNet classes. Each class' score is computed by taking a dot product between the visualized weights and the image. Hence, the weights can be thought of as a template: the images show what the classifier is looking for. For example, Granny Smith apples are green, so the linear classifier has positive weights in the green color channel and negative weights in blue and red channels, across all spatial positions. It is hence effectively counting the amount of green stuff in the middle. You can also see the learned templates for all imagenet classes for fun.
+By the way, I haven’t seen anyone report linear classification accuracy on ImageNet before, but it turns out to be about 3.0% top-1 accuracy (and about 10% top-5) on ImageNet. I haven’t done a completely exhaustive hyperparameter sweep but I did a few rounds of manual binary search.
+
+Now that we’ve trained the model parameters we can start to produce fooling images. This turns out to be quite trivial in the case of linear classifiers and no backpropagation is required. This is because when your score function is a dot product s=wTx
+, then the gradient on the image x
+ is simply ∇xs=w
+. That is, we take an image we would like to start out with, and then if we wanted to fool the model into thinking that it is some other class (e.g. goldfish), we have to take the weights corresponding to the desired class, and add some fraction of those weights to the image:
+
+  
+Fooled linear classifier: The starting image (left) is classified as a kit fox. That's incorrect, but then what can you expect from a linear classifier? However, if we add a small amount "goldfish" weights to the image (top row, middle), suddenly the classifier is convinced that it's looking at one with high confidence. We can distort it with the school bus template instead if we wanted to. Similar figures (but on the MNIST digits dataset) can be seen in Figure 2 of Goodfellow et al.
+We can also start from random noise and achieve the same effect:
+
+ 
+Same process but starting with a random image.
+Of course, these examples are not as impactful as the ones that use a ConvNet because the ConvNet gives state of the art performance while a linear classifier barely gets to 3% accuracy, but it illustrates the point that even with a simple, shallow function it is still possible to play around with the input in imperceptible ways and get almost arbitrary results.
+
+Regularization. There is one subtle comment to make regarding regularization strength. In my experiments above, increasing the regularization strength gave nicer, smoother and more diffuse weights but generalized to validation data worse than some of my best classifiers that displayed more noisy patterns. For example, the nice and smooth templates I’ve shown only achieve 1.6% accuracy. My best model that achieves 3.0% accuracy has noisier weights (as seen in the middle column of the fooling images). Another model with very low regularization reaches 2.8% and its fooling images are virtually indistinguishable yet produce 100% confidences in the wrong class. In particular:
+
+High regularization gives smoother templates, but at some point starts to works worse. However, it is more resistant to fooling. (The fooling images look noticeably different from their original)
+Low regularization gives more noisy templates but seems to work better that all-smooth templates. It is less resistant to fooling.
+Intuitively, it seems that higher regularization leads to smaller weights, which means that one must change the image more dramatically to change the score by some amount. It’s not immediately obvious if and how this conclusion translates to deeper models.
+
+ 
+Linear classifier with lower regularization (which leads to more noisy class weights) is easier to fool (top). Higher regularization produces more diffuse filters and is harder to fool (bottom). That is, it's harder to achieve very confident wrong answers (however, with weights so small it is hard to achieve very confident correct answers too). To flip the label to a wrong class, more visually obvious perturbations are also needed. Somewhat paradoxically, the model with the noisy weights (top) works quite a bit better on validation data (2.6% vs. 1.4% accuracy).
+Toy Example
+We can understand this process in even more detail by condensing the problem to the smallest toy example that displays the problem. Suppose we train a binary logistic regression, where we define the probability of class 1 as P(y=1∣x;w,b)=σ(wTx+b)
+, where σ(z)=1/(1+e−z)
+ is the sigmoid function that squashes the class 1 score s=wTx+b
+ into range between 0 and 1, where 0 is mapped to 0.5. This classifier hence decides that the class of the input is 1 if s>0
+, or equivalently if the class 1 probability is more than 50% (i.e. σ(s)>0.5
+). Suppose further that we had the following setup:
+
+x = [2, -1, 3, -2, 2, 2, 1, -4, 5, 1] // input
+w = [-1, -1, 1, -1, 1, -1, 1, 1, -1, 1] // weight vector
+If you do the dot product, you get -3. Hence, probability of class 1 is 1/(1+e^(-(-3))) = 0.0474. In other words the classifier is 95% certain that this is example is class 0. We’re now going to try to fool the classifier. That is, we want to find a tiny change to x in such a way that the score comes out much higher. Since the score is computed with a dot product (multiply corresponding elements in x and w then add it all up), with a little bit of thought it’s clear what this change should be: In every dimension where the weight is positive, we want to slightly increase the input (to get slightly more score). Conversely, in every dimension where the weight is negative, we want the input to be slightly lower (again, to get slightly more score). In other words, an adversarial xad might be:
+
+// xad = x + 0.5w gives:
+xad = [1.5, -1.5, 3.5, -2.5, 2.5, 1.5, 1.5, -3.5, 4.5, 1.5]
+Doing the dot product again we see that suddenly the score becomes 2. This is not surprising: There are 10 dimensions and we’ve tweaked the input by 0.5 in every dimension in such a way that we gain 0.5 in each one, adding up to a total of 5 additional score, rising it from -3 to 2. Now when we look at probability of class 1 we get 1/(1+e^(-2)) = 0.88. That is, we tweaked the original x by a small amount and we improved the class 1 probability from 5% to 88%! Moreover, notice that in this case the input only had 10 dimensions, but an image might consist of many tens of thousands of dimensions, so you can afford to make tiny changes across all of them that all add up in concert in exactly the worst way to blow up the score of any class you wish.
+
+Conclusions
+Several other related experiments can be found in Explaining and Harnessing Adversarial Examples by Goodfellow et al. This paper is a required reading on this topic. It was the first to articulate and point out the linear functions flaw, and more generally argued that there is a tension between models that are easy to train (e.g. models that use linear functions) and models that resist adversarial perturbations.
+
+As closing words for this post, the takeaway is that ConvNets still work very well in practice. Unfortunately, it seems that their competence is relatively limited to a small region around the data manifold that contains natural-looking images and distributions, and that once we artificially push images away from this manifold by computing noise patterns with backpropagation, we stumble into parts of image space where all bets are off, and where the linear functions in the network induce large subspaces of fooling inputs.
+
+With wishful thinking, one might hope that ConvNets would produce all-diffuse probabilities in regions outside the training data, but there is no part in an ordinary objective (e.g. mean cross-entropy loss) that explicitly enforces this constraint. Indeed, it seems that the class scores in these regions of space are all over the place, and worse, a straight-forward attempt to patch this up by introducing a background class and iteratively adding fooling images as a new background class during training are not effective in mitigating the problem.
+
+It seems that to fix this problem we need to change our objectives, our forward functional forms, or even the way we optimize our models. However, as far as I know we haven’t found very good candidates for either. To be continued.
+
+Further Reading
+Ian Goodfellow gave a talk on this work at the RE.WORK Deep Learning Summit 2015
+You can fool ConvNets as part of CS231n Assignment #3 IPython Notebook.
+IPython Notebook for this experiment. Also my Caffe linear classifier protos if you like.
+
+Andrej Karpathy blog
+ karpathy
+ karpathyAndrej Karpathy blog
+About
+What I learned from competing against a ConvNet on ImageNet
+Sep 2, 2014
+
+The results of the 2014 ImageNet Large Scale Visual Recognition Challenge (ILSVRC) were published a few days ago. The New York Times wrote about it too. ILSVRC is one of the largest challenges in Computer Vision and every year teams compete to claim the state-of-the-art performance on the dataset. The challenge is based on a subset of the ImageNet dataset that was first collected by Deng et al. 2009, and has been organized by our lab here at Stanford since 2010. This year, the challenge saw record participation with 50% more participants than last year, and records were shattered with staggering improvements in both classification and detection tasks.
+
+(My personal) ILSVRC 2014 TLDR: 50% more teams. 50% improved classification and detection. ConvNet ensembles all over the place. Google team wins.
+
+Of course there’s much more to it, and all details and takeaways will be discussed at length in Zurich, at the upcoming ECCV 2014 workshop happening on September 12.
+
+Additionally, we just (September 2nd) published an arXiv preprint describing the entire history of ILSVRC and a large amount of associated analysis, check it out on arXiv. This post will zoom in on a portion of the paper that I contributed to (Section 6.4 Human accuracy on large-scale image classification) and describe some of its context.
+
+ILSVRC Classification Task
+For the purposes of this post, I would like to focus, in particular, on image classification because this task is the common denominator for many other Computer Vision tasks. The classification task is made up of 1.2 million images in the training set, each labeled with one of 1000 categories that cover a wide variety of objects, animals, scenes, and even some abstract geometric concepts such as “hook”, or “spiral”. The 100,000 test set images are released with the dataset, but the labels are withheld to prevent teams from overfitting on the test set. The teams have to predict 5 (out of 1000) classes and an image is considered to be correct if at least one of the predictions is the ground truth. The test set evaluation is carried out on our end by comparing the predictions to our own set of ground truth labels.
+
+
+Example images from the classification task. Find full-scale images here.
+GoogLeNet’s Impressive Performance
+I was looking at the results about a week ago and became particularly intrigued by GoogleLeNet’s winning submission for the classification task, which achieved a Hit@5 error rate of only 6.7% on the ILSVRC test set. I was relatively familiar with the scope and difficulty of the classification task: these are unconstrained internet images. They are a jungle of viewpoints, lighting conditions, and variations of all imaginable types. This begged the question: How do humans compare?
+
+There are now several tasks in Computer Vision where the performance of our models is close to human, or even superhuman. Examples of these tasks include face verification, various medical imaging tasks, Chinese character recognition, etc. However, many of these tasks are fairly constrained in that they assume input images from a very particular distribution. For example, face verification models might assume as input only aligned, centered, and normalized images. In many ways, ImageNet is harder since the images come directly from the “jungle of the interwebs”. Is it possible that our models are reaching human performance on such an unconstrained task?
+
+Computing Human Accuracy
+In short, I thought that the impressive performance by the winning team would only make sense if it was put in perspective with human accuracy. I was also in the unique position of being able to evaluate it (given that I share office space with ILSVRC organizers), so I set out to quantify the human accuracy and characterize the differences between human predictions with those of the winning model.
+
+Wait, isn’t human accuracy 100%? Thank you, good question. It’s not, because the ILSVRC dataset was not labeled in the same way we are classifying it here. For example, to collect the images for the class “Border Terrier” the organizers searched the query on internet and retrieved a large collection of images. These were then filtered a bit with humans by asking them a binary “Is this a Border Terrier or not?”. Whatever made it through became the “Border Terrier” class, and similar for all the other 1000 images. Therefore, the data was not collected in a discriminative but a binary manner, and is also subject to mistakes and inaccuracies. Some images can sometimes also contain multiple of the ILSVRC classes, etc.
+
+CIFAR-10 digression. It’s fun to note that about 4 years ago I performed a similar (but much quicker and less detailed) human classification accuracy analysis on CIFAR-10. This was back when the state of the art was at 77% by Adam Coates, and my own accuracy turned out to be 94%. I think the best ConvNets now get about 92%. The post about that can be found here. I never imagined I’d be doing the same for ImageNet a few years down the road :)
+
+There’s one issue to clarify on. You may ask: But wait, the ImageNet test set labels were obtained from humans in the first place. Why go about re-labeling it all over again? Isn’t human performance 0% by definition? Kind of, but not really. It is important to keep in mind that ImageNet was annotated as a binary ask. For example, to collect images of the dog class “Kelpie”, the query was submitted to search engines and then humans on Amazon Mechanical Turk were used for the binary task of filtering out the noise. The ILSVRC classification task, on the other hand, is 1000-way classification. It’s not a binary task such as the one used to collect the data.
+
+Labeling Interface
+I developed a labeling interface that would help us evaluate the human performance. It looked similar to, but not identical, to the screenshot below:
+
+
+A crop of a screenshot of the labeling interface for the ILSVRC validation data. Try it out for yourself.
+The interface consisted of the test image on the left, and 1000 classes listed on the right. Each class was followed by 13 example images from the training set so that the categories were easier for a human to scan visually. The categories were also sorted in the topological order of the ImageNet hierarchy, which places semantically similar concepts nearby in the list. For example, all motor vehicle-related classes are arranged contiguously in the list. Finally, the interface is web-based so it is easy to naturally scroll through the classes, or search for them by text.
+
+Try it out! I’m making the the labeling interface available to everyone so that you can also try labeling ILSVRC yourselves and draw your own conclusions. There are a few modifications in this version from the one we used to collect the data. I added two buttons (Show answer, and Show google prediction), and of course, the images shown in this version are the validation images, not the test set images. The GoogLeNet validation set predictions were graciously provided by the Google team.
+
+Roadblocks along the way
+It was hard. As I beta-tested the interface, the task of labeling images with 5 out of 1000 categories quickly turned out to be extremely challenging, even for some friends in the lab who have been working on ILSVRC and its classes for a while. First we thought we would put it up on AMT. Then we thought we could recruit paid undergrads. Then I organized a labeling party of intense labeling effort only among the (expert labelers) in our lab. Then I developed a modified interface that used GoogLeNet predictions to prune the number of categories from 1000 to only about 100. It was still too hard - people kept missing categories and getting up to ranges of 13-15% error rates. In the end I realized that to get anywhere competitively close to GoogLeNet, it was most efficient if I sat down and went through the painfully long training process and the subsequent careful annotation process myself.
+
+It took a while. I ended up training on 500 validation images and then switched to the test set of 1500 images. The labeling happened at a rate of about 1 per minute, but this decreased over time. I only enjoyed the first ~200, and the rest I only did #forscience. (In the end we convinced one more expert labeler to spend a few hours on the annotations, but they only got up to 280 images, with less training, and only got to about 12%). The labeling time distribution was strongly bimodal: Some images are easily recognized, while some images (such as those of fine-grained breeds of dogs, birds, or monkeys) can require multiple minutes of concentrated effort. I became very good at identifying breeds of dogs.
+
+It was worth it. Based on the sample of images I worked on, the GoogLeNet classification error turned out to be 6.8% (the error on the full test set of 100,000 images is 6.7%). My own error in the end turned out to be 5.1%, approximately 1.7% better. If you crunch through the statistical significance calculations (i.e. comparing the two proportions with a Z-test) under the null hypothesis of them being equal, you get a one-sided p-value of 0.022. In other words, the result is statistically significant based on a relatively commonly used threshold of 0.05. Lastly, I found the experience to be quite educational: After seeing so many images, issues, and ConvNet predictions you start to develop a really good model of the failure modes.
+
+My error turned out to be 5.1%, compared to GoogLeNet error of 6.8%. Still a bit of a gap to close (and more).
+
+
+Representative example of practical frustrations of labeling ILSVRC classes. Aww, a cute dog! Would you like to spend 5 minutes scrolling through 120 breeds of dog to guess what species it is?
+Analysis of errors
+We inspected both human and GoogLeNet errors to gain an understanding of common error types and how they compare. The analysis and insights below were derived specifically from GoogLeNet predictions, but I suspect that many of the same errors may be present in other methods. Let me copy paste the analysis from our ILSVRC paper:
+
+Types of error that both GoogLeNet human are susceptible to:
+
+Multiple objects. Both GoogLeNet and humans struggle with images that contain multiple ILSVRC classes (usually many more than five), with little indication of which object is the focus of the image. This error is only present in the Classification setting, since every image is constrained to have exactly one correct label. In total, we attribute 24 (24%) of GoogLeNet errors and 12 (16%) of human errors to this category. It is worth noting that humans can have a slight advantage in this error type, since it can sometimes be easy to identify the most salient object in the image.
+
+Incorrect annotations. We found that approximately 5 out of 1500 images (0.3%) were incorrectly annotated in the ground truth. This introduces an approximately equal number of errors for both humans and GoogLeNet.
+
+Types of error that GoogLeNet is more susceptible to than human:
+
+Object small or thin. GoogLeNet struggles with recognizing objects that are very small or thin in the image, even if that object is the only object present. Examples of this include an image of a standing person wearing sunglasses, a person holding a quill in their hand, or a small ant on a stem of a flower. We estimate that approximately 22 (21%) of GoogLeNet errors fall into this category, while none of the human errors do. In other words, in our sample of images, no image was mislabeled by a human because they were unable to identify a very small or thin object. This discrepancy can be attributed to the fact that a human can very effectively leverage context and affordances to accurately infer the identity of small objects (for example, a few barely visible feathers near person’s hand as very likely belonging to a mostly occluded quill).
+
+Image filters. Many people enhance their photos with filters that distort the contrast and color distributions of the image. We found that 13 (13%) of the images that GoogLeNet incorrectly classified contained a filter. Thus, we posit that GoogLeNet is not very robust to these distortions. In comparison, only one image among the human errors contained a filter, but we do not attribute the source of the error to the filter.
+
+Abstract representations. We found that GoogLeNet struggles with images that depict objects of interest in an abstract form, such as 3D-rendered images, paintings, sketches, plush toys, or statues. An example is the abstract shape of a bow drawn with a light source in night photography, a 3D-rendered robotic scorpion, or a shadow on the ground, of a child on a swing. We attribute approximately 6 (6%) of GoogLeNet errors to this type of error and believe that humans are significantly more robust, with no such errors seen in our sample.
+
+Miscellaneous sources. Additional sources of error that occur relatively infrequently include extreme closeups of parts of an object, unconventional viewpoints such as a rotated image, images that can significantly benefit from the ability to read text (e.g. a featureless container identifying itself as “face powder”), objects with heavy occlusions, and images that depict a collage of multiple images. In general, we found that humans are more robust to all of these types of error.
+
+
+Representative validation images that highlight common sources of error. For each image, we display the ground truth in blue, and top 5 predictions from GoogLeNet follow (red = wrong, green = right). GoogLeNet predictions on the validation set images were graciously provided by members of the GoogLeNet team. From left to right: Images that contain multiple objects, images of extreme closeups and uncharacteristic views, images with filters, images that significantly benefit from the ability to read text, images that contain very small and thin objects, images with abstract representations, and example of a fine-grained image that GoogLeNet correctly identifies but a human would have significant difficulty with.
+Types of error that human is more susceptible to than GoogLeNet:
+
+Fine-grained recognition. We found that humans are noticeably worse at fine-grained recognition (e.g. dogs, monkeys, snakes, birds), even when they are in clear view. To understand the difficulty, consider that there are more than 120 species of dogs in the dataset. We estimate that 28 (37%) of the human errors fall into this category, while only 7 (7%) of GoogLeNet erros do.
+
+Class unawareness. The annotator may sometimes be unaware of the ground truth class present as a label option. When pointed out as an ILSVRC class, it is usually clear that the label applies to the image. These errors get progressively less frequent as the annotator becomes more familiar with ILSVRC classes. Approximately 18 (24%) of the human errors fall into this category.
+
+Insufficient training data. Recall that the annotator is only presented with 13 examples of a class under every category name. However, 13 images are not always enough to adequately convey the allowed class variations. For example, a brown dog can be incorrectly dismissed as a “Kelpie” if all examples of a “Kelpie” feature a dog with black coat. However, if more than 13 images were listed it would have become clear that a “Kelpie” may have a brown coat. Approximately 4 (5%) of human errors fall into this category.
+
+Conclusions
+We investigated the performance of trained human annotators on a sample of up to 1500 ILSVRC test set images. Our results indicate that a trained human annotator is capable of outperforming the best model (GoogLeNet) by approximately 1.7% (p = 0.022).
+
+We expect that some sources of error may be relatively easily eliminated (e.g. robustness to filters, rotations, collages, effectively reasoning over multiple scales), while others may prove more elusive (e.g. identifying abstract representations of objects). On the hand, a large majority of human errors come from fine-grained categories and class unawareness. We expect that the former can be significantly reduced with fine-grained expert annotators, while the latter could be reduced with more practice and greater familiarity with ILSVRC classes.
+
+It is clear that humans will soon only be able to outperform state of the art image classification models by use of significant effort, expertise, and time. One interesting follow-up question for future investigation is how computer-level accuracy compares with human-level accuracy on more complex image understanding tasks.
+
+“It is clear that humans will soon only be able to outperform state of the art image classification models by use of significant effort, expertise, and time.”
+
+As for my personal take-away from this week-long exercise, I have to say that, qualitatively, I was very impressed with the ConvNet performance. Unless the image exhibits some irregularity or tricky parts, the ConvNet confidently and robustly predicts the correct label. If you’re feeling adventurous, try out the labeling interface for yourself and draw your own conclusions. I can promise that you’ll gain interesting qualitative insights into where state-of-the-art Computer Vision works, where it fails, and how.
+
+EDIT: additional discussions:
+
+Pierre’s Google+
+Reddit /r/MachineLearning
+UPDATE:
+
+ImageNet workshop page now has links to many of the teams’ slides and videos.
+GoogLeNet paper on arXiv describes the details of their architecutre.
+UPDATE2 (14 Feb 2015):
+
+There have now been several reported results that surpass my 5.1% error on ImageNet. I’m astonished to see such rapid progress. At the same time, I think we should keep in mind the following:
+
+Human accuracy is not a point. It lives on a tradeoff curve.
+
+We trade off human effort and expertise with the error rate: I am one point on that curve with 5.1%. My labmates with almost no training and less patience are another point, with even up to 15% error. And based on some calculations that consider my exact error types and hypothesizing which ones may be easier to fix than others, it’s not unreasonable to suggest that an ensemble of very dedicated expert human labelers might push this down to 3%, with about 2% being an optimistic error rate lower bound. I know it’s not as exciting as having a single number, but it’s the right way of thinking about it. See more details in my recent Google+ post.
+
+
+Andrej Karpathy blog
+ karpathy
+ karpathy
+Musings of a Computer Scientist.
+Musings of a Computer Scientist.Andrej Karpathy blog
+About
+Quantifying Productivity
+Aug 3, 2014
+
+I’m always on a lookout for interesting datasets to collect, analyze and interpret. And what better dataset to collect/analyze than the meta-dataset of my own activity collecting/analyzing other datasets? How much time do I *really spend working per day? How do I spend most of that time? What makes me productive? These are all relatively important questions that I’d like answers to, and since I prefer my answers based on data and not confirmation-bias-susceptible personal anecdotes, I wrote ulogme.
+
+“I prefer my answers based on data, not confirmation-bias-susceptible personal anecdotes”
+
+I’ve now collected my computer usage data over a period of almost 3 months. In this post I’ll highlight some of the features of the project, some of the insights I was able to derive so far and some thoughts about where I hope I can take it next. And who knows, maybe by the end of the post you’ll want to become a user yourself :)
+
+What’s out there already
+The idea of tracking and visualizing your computer activity is not at all new. It has been around in various shapes and forms in Quantified Self circles and several programs already exist that try to fill this need. Among the few better known ones are RescueTime and Toggl, but there are literally tens to hundreds of other quite terrible copies. Among all of these, I couldn’t find anything that satisfies a few very simple, basic requirements:
+
+The user interface must be web-based because it’s 2014
+Everything must be open source and free
+The data must never leave the local machine (No cloud mambo jambo - too personal!)
+It must be easily customizable and look pretty
+Nothing like this (by far, actually) exists, so I set out to implement my own solution.
+
+Brief Tour of ulogme : Single Day View
+ulogme is small and simple: There are two backend components: a tracking script that records activity and a small local web server wrapper that serves the activity logs to the frontend (visualization pages). The tracking script currently records active window titles (at frequency of once every 2 seconds) and keystroke typing frequency.
+
+Lets go through a brief overview of some of the resulting visualizations and features. First there is the single day view. Lets look at my August 1st, for example. The header tells us the day of the recording and there is space for a short “blog” post that can be written up for each day:
+
+
+Header: day information, refresh button, buttons for going between days, and a little editable "blog" post for the day.
+Now we start to get to the meat. It looks like I was in the office from 10AM to 8PM on this day. Now, remember that we record keystrokes and window titles throughout. What follows is the keystroke breakdown for the day:
+
+
+Keystroke statistics for the day.
+We see that I spent most of the day coding in Sublime Text 2 (which I use to write Python/JS/C++) and Gmail - Looks like I wrote quite a bit of email! Next, ulogme shows the barcode of the day, as I like to call it. This is a breakdown of all the windows on that day:
+
+
+Barcode of the day. Mousing over any of these strips reveals the exact window title.
+This view is a little dense so let me unpack it one by one:
+
+The Notes feature (on top) allows me to enter arbitrary notes for any time of day. Notice I also wrote an (optional) feature that looks for notes about coffee and calculates my levels of caffeine based on actual half-life of coffee. I am curious what caffeine does to my productivity!
+I group my windows into display groups barcodes, where the first group involves fun (Gmail/Chrome/Non-coding files opened in Sublime Text 2 - such as .markdown for blogging) and the second the group involves work (Matlab/Ipython Notebook with.js/.css/.cpp/.h/.py files, or PDF files opened (papers)). Looks like I spent roughly half of the day on work.
+Hacking Streak is a nifty feature that tries to identify contiguous hacking activity and correlates reasonably with my productivity. It looks for active windows that constitute work (I define this in settings) and then for continuous keystrokes above some typing frequency threshold. This indicates that I’m in a state of hacking, and the streak gets gradually interrupted if I switch windows to non-working titles, or if I stop writing code. The longest one visible here was 22 minutes and when I hover over the active title at that time, I see that it was me adding a feature to ulogme. The longest I’ve seen anyone get is a lab mate beta tester friend with an intense 50-minute hacking streak.
+In the end, ulogme shows the final breakdown of titles that occupied me on this day:
+
+
+The final breakdown of active window titles.
+That’s interesting, it looks like I actually only spent 10% of my day in Gmail. So even though I wrote a lot, it was just a few emails and chats I quickly sent out.
+
+Brief Tour of ulogme : Global Overview
+Insights for one day are interesting, but everything becomes signficiantly more meaningful when it is put in context of a large number of days. Perhaps you noticed the “Overview” link on the header; Clicking this takes you to the overview page of ulogme that takes the statistics for all days and puts them together. I recorded my activity for almost 3 months now. Here is the delicious data visualized for the entire period (with some overlayed annotations):
+
+
+Total amount of time per day spent in various applications over a period of three months. The titles on top are clickable and toggle on/off the visualization of any one of the titles.
+SO AWESOME. There are many fun things to note:
+
+Note the deadline mode right before NIPS paper deadline on June 6th. I was frantically writing Latex for the most part :)
+Right after the deadline, you see a dip in activity. This is because I was mostly on my laptop preparing things for the CVPR conference where I had to give a talk. This points to one issue with ulogme - there is no syncing across machines right now.
+Notice a few dips on Sundays – apparently Sundays are my rest days :)
+Am I just hallucinating this, or is there a fairly significant jump in activity right after breaks (note very high bars right after CVPR and vacation.) This needs more data but it would be interesting if vacations actually made me more productive. We’d have to measure more than just time spent on computer, though.
+When I toggle off all non-working titles, the visualizaiton (not shown) reveals that I only spend somewhat depressingly little time actually working. Many days I come into lab in the morning and leave late at night to go straight to sleep, but even these days sometimes add up to only roughly 5-6 hours of actual coding. I was very surprised about this initially and went looking for bugs, but it is true upon closer inspection - there is a short commute, lunch, dinner, random reading groups, meetings, random slacking off on the internet, gmail, etc etc… it all builds up quite quickly! Depressing to see that quantified.
+Next, ulogme gives me nice breakdown for both keystrokes and time spent in every window, across all time:
+
+
+Summary of keys and time per window across all 3 months.
+This is a little incomplete because I do some hacking on my laptop, but it paints an interesting picture nonetheless. It looks like I spent a good chunk of desktop time in Matlab, but seemingly I spend the most amount of time in Chrome screwing around and browsing the internet. Great.
+
+What it takes to write a paper. Note that, interestingly, my total time for Latex is 35 hours - this is how long it takes to write a paper! Additionally, I pressed 225,149 keys in my Latex editor and the $ wc -l on my paper .tex file reveals that it has 40,192 characters. Some of it is template code but, at least approximately, this means that it takes about 5.6 characters for every one character in the final paper!
+
+It takes 35 hours and 225,149 keys to write a 40,192-character NIPS paper (i.e. 5.6 characters must be typed for every one final character.)
+
+The final visualization is too long to paste here entirely, but I will show a snippet:
+
+
+Keystroke frequencies visualized for every day, along with the marginal sums on top and right.
+This visualization seems to suggest that I do most of my work between 10AM and 8PM, and a very productive day is about 50,000 keystrokes. You can also see a bit of my post-NIPS refactory period with much lower keystroke activity.
+
+In the end, ulogme tells me that over the last 3 months I’ve pressed a total of 1,608,943 keys over 83 days, or approximately 19,384 per day.
+
+Going forward
+Going forward, I’m hoping to make ulogme into a nice, open-sourced pet project. The code is all available on Github under MIT License and anyone is welcome try it out (if you’re on Ubuntu or OSX - Windows is not supported, and if you’re using a modern browser).
+
+And if you’re feeling extra adventurous, I warmly welcome pull requests for new features or bug fixes. The code base is a mix of Python, Javascript and I use d3.js for all visualizations. The project is in fairly early stages and the code is not among the nicest I’ve produced, but I’ve started fairly major refactoring efforts to make the onboarding process easier.
+
+In longer term, I’m hoping that ulogme codebase will evolve to become beautifully modular set of data view plugins that could be customized, stacked up and composed in the user interface as desired.
+
+Im summary, I feel I’ve gained quite a few insights into my own work habits by just visualizating the data, but there is much more work to be done on the analysis side as well. The holy grail here is still not implemented: What are the correlated of my productivity? Does sleeping more help? Does drinking coffee help? Do vacations or breaks help at all? All of these questions have answers and I can’t wait to find them, in the data.
+
+
+Andrej Karpathy blog
+ karpathy
+ karpathy
+Musings of a Computer Scientist.Andrej Karpathy blog
+About
+Lessons learned from manually classifying CIFAR-10
+Apr 27, 2011
+
+CIFAR-10
+Note, this post is from 2011 and slightly outdated in some places.
+
+
+Statistics. CIFAR-10 consists of 50,000 training images, all of them in 1 of 10 categories (displayed left). The test set consists of 10,000 novel images from the same categories, and the task is to classify each to its category. The state of the art is currently at about 80% classification accuracy (4000 centroids), achieved by Adam Coates et al. (PDF). This paper achieved the accuracy by using whitening, k-means to learn many centroids, and then using a soft activation function as features.
+
+State of the Art performance. By the way, running their method with 1600 centroids gives 77% classification accuracy. If you set the clusters to be random the accuracy becomes 70%, and if you set the clusters to be random patches from the training set, the accuracy goes up to 74%. It seems like the whole purpose of k-means is to nicely spread out the clusters around the data. I’m guessing that the 70% random clusters performance might be because many of the clusters are relatively too far away from data manifolds, and never become activated – it’s as if you had much fewer clusters to begin with.
+
+Human Accuracy. Over the weekend I wanted to see what kind of classification accuracy a human would achieve on this dataset. I set out to write some quick MATLAB code that would provide the interface to do this. It showed one image at a time and allowed me to press a key from 0-9 indicating my belief about its class category. My classification accuracy ended up at about 94% on 400 images. Why not 100%? Because some images are really unfair! To give you an idea, here are some questionable images from CIFAR-10: 
+
+CIFAR-10 human accuracy is approximately 94%
+
+Observations
+A few observations I derived from this exercise:
+
+The objects within classes in this dataset can be extremely varied. For example the “bird” class contains many different types of bird (both big birds and small). Not only are there many types of bird, but the occur at many possible magnifications, all possible angles and all possible poses. Sometimes only parts of the bird are shown. The poses problem is even worse for the dog/cat category, because these animals occur at many many different types of poses, and sometimes only the head is shown. Or left part of the body, etc.
+
+My classification method felt strangely dichotomous. Sometimes you can clearly see the animal or object and classify it based very highly-informative distinct parts (for example, you find ears of a cat). Other times, my recognition was purely based on context and the overall cues in the image such as the colors.
+
+The CIFAR-10 dataset is too small to properly contain examples of everything that it is asking for in the test set. I base this conclusion at least on my multiple ways of visualizing the nearest image in the training set.
+
+I don’t quite understand how Adam Coates et al. perform so well on this dataset (80%) with their method. My guess is that it works along the following lines: looking at the image squinting your eyes you can almost always narrow down the category to about 2 or 3. The final disambiguation probably comes from finding very good specific informative patches (like a patch of some kind of fur, or pointy ear part, etc.). The k-means dictionary must be catching these cases and the SVM likely picks up on them.
+
+My impression from this exercise is that it will be hard to go above 80%, but I suspect improvements might be possible up to range of about 85-90%, depending on how wrong I am about the lack of training data. (2015 update: Obviously this prediction was way off, with state of the art now in 95%, as seen in this Kaggle competition leaderboard. I’m impressed!)
+
+I encourage people to try this for themselves (see my code, above), as it is very interesting and fun! I have trouble exactly articulating what I learned, but overall I feel like I gained more intuition for image classification tasks and more appreciation for the difficulty of the problem at hand.
+
+Finally, here is an example of my debugging interface: 
+
+The Matlab code used to generate these results can be found here
+
+
+Andrej Karpathy blog
+ karpathy
+ karpathy
+Musings of a Computer Scientist.Andrej Karpathy blog
+About
+The state of Computer Vision and AI: we are really, really far away.
+Oct 22, 2012
+
+ The picture above is funny.
+
+But for me it is also one of those examples that make me sad about the outlook for AI and for Computer Vision. What would it take for a computer to understand this image as you or I do? I challenge you to think explicitly of all the pieces of knowledge that have to fall in place for it to make sense. Here is my short attempt:
+
+You recognize it is an image of a bunch of people and you understand they are in a hallway
+You recognize that there are 3 mirrors in the scene so some of those people are “fake” replicas from different viewpoints.
+You recognize Obama from the few pixels that make up his face. It helps that he is in his suit and that he is surrounded by other people with suits.
+You recognize that there’s a person standing on a scale, even though the scale occupies only very few white pixels that blend with the background. But, you’ve used the person’s pose and knowledge of how people interact with objects to figure it out.
+You recognize that Obama has his foot positioned just slightly on top of the scale. Notice the language I’m using: It is in terms of the 3D structure of the scene, not the position of the leg in the 2D coordinate system of the image.
+You know how physics works: Obama is leaning in on the scale, which applies a force on it. Scale measures force that is applied on it, that’s how it works => it will over-estimate the weight of the person standing on it.
+The person measuring his weight is not aware of Obama doing this. You derive this because you know his pose, you understand that the field of view of a person is finite, and you understand that he is not very likely to sense the slight push of Obama’s foot.
+You understand that people are self-conscious about their weight. You also understand that he is reading off the scale measurement, and that shortly the over-estimated weight will confuse him because it will probably be much higher than what he expects. In other words, you reason about implications of the events that are about to unfold seconds after this photo was taken, and especially about the thoughts and how they will develop inside people’s heads. You also reason about what pieces of information are available to people.
+There are people in the back who find the person’s imminent confusion funny. In other words you are reasoning about state of mind of people, and their view of the state of mind of another person. That’s getting frighteningly meta.
+ Finally, the fact that the perpetrator here is the president makes it maybe even a little more funnier. You understand what actions are more or less likely to be undertaken by different people based on their status and identity.
+I could go on, but the point here is that you’ve used a HUGE amount of information in that half second when you look at the picture and laugh. Information about the 3D structure of the scene, confounding visual elements like mirrors, identities of people, affordances and how people interact with objects, physics (how a particular instrument works,  leaning and what that does), people, their tendency to be insecure about weight, you’ve reasoned about the situation from the point of view of the person on the scale, what he is aware of, what his intents are and what information is available to him, and you’ve reasoned about people reasoning about people. You’ve also thought about the dynamics of the scene and made guesses about how the situation will unfold in the next few seconds visually, how it will unfold in the thoughts of people involved, and you reasoned about how likely or unlikely it is for people of particular identity/status to carry out some action. Somehow all these things come together to “make sense” of the scene.
+
+It is mind-boggling that all of the above inferences unfold from a brief glance at a 2D array of R,G,B values. The core issue is that the pixel values are just a tip of a huge iceberg and deriving the entire shape and size of the icerberg from prior knowledge is the most difficult task ahead of us. How can we even begin to go about writing an algorithm that can reason about the scene like I did? Forget for a moment the inference algorithm that is capable of putting all of this together; How do we even begin to gather data that can support these inferences (for example how a scale works)? How do we go about even giving the computer a chance?
+
+Now consider that the state of the art techniques in Computer Vision are tested on things like Imagenet (task of assigning 1-of-k labels for entire images), or Pascal VOC detection challenge (+ include bounding boxes). There is also quite a bit of work on pose estimation, action recognition, etc., but it is all specific, disconnected, and only half works. I hate to say it but the state of CV and AI is pathetic when we consider the task ahead, and when we think about how we can ever go from here to there. The road ahead is long, uncertain and unclear.  
+
+I’ve seen some arguments that all we need is lots more data from images, video, maybe text and run some clever learning algorithm: maybe a better objective function, run SGD, maybe anneal the step size, use adagrad, or slap an L1 here and there and everything will just pop out. If we only had a few more tricks up our sleeves! But to me, examples like this illustrate that we are missing many crucial pieces of the puzzle and that a central problem will be as much about obtaining the right training data in the right form to support these inferences as it will be about making them.
+
+Thinking about the complexity and scale of the problem further, a seemingly inescapable conclusion for me is that we may also need embodiment, and that the only way to build computers that can interpret scenes like we do is to allow them to get exposed to all the years  of (structured, temporally coherent) experience we have,  ability to interact with the world, and some magical active learning/inference architecture that I can barely even imagine when I think backwards about what it should be capable of.
+
+In any case, we are very, very far and this depresses me. What is the way forward? :( Maybe I should just do a startup. I have a really cool idea for a mobile local social iPhone app.
+
+
+Andrej Karpathy blog
+ karpathy
+ karpathy
+Musings of a Computer Scientist.Andrej Karpathy blog
+About
+Chrome Extension Programming: Illustrating a Basic Survival Skill with a Twitter Case Study
+Nov 23, 2013
+
+Extension Hacking
+I wanted to share a few examples of a powerful skill that I’ve been gradually picking up over the last year. It is simply the ability to quickly hack together custom browser extensions in Chrome and using them to customize my favorite websites. Writing extensions is very fast: you need a short manifest file that contains some boring meta information, a few js/html files with your code in a folder, and then you simply activate the folder as an extension from the Extensions menu with a few clicks. In general, you can do a lot of fancy things with extensions:
+
+add buttons, context-menu items
+modify functionality of Omnibox
+create extension-specific webpages that display various data/settings
+your extension is allowed to have local (or synced), persistent storage of data
+you can run almost arbitrary Javascript over the DOM of any webpage
+I can’t stress how powerful the last item is. You can run Javascript. On top of any webpage. You can Read the page DOM. You can write to it, automatically, on load of the webpage or even periodically! This gives you complete freedom in modifying any webpage to your tastes: remove annoying content, add new features, log/scrape website data, change the layout, etc. It’s completely crazy!
+
+I’ll walk you through some examples with possible mods of Twitter just to give you a glimpse of how easy and powerful this can be. Twitter is fun and I use it often, but their website is annoying, has some ugly elements, and sometimes lacks certain functionality I would like it to have. A normal person would request features and wait, but with the dark arts of extension hacking we can do much better. Lets get right to it.
+
+Fixing the Ugly
+A recent change on Twitter added this ugly text, visible by default and always, on every single tweet: 
+
+I understand it gets people to accidentally click on these more and pads Twitter’s engagement numbers, but it’s useless, ugly, and it just takes up too much space. Lets right click on one of these and choose Inspect Element. This opens up the HTML of the page and here we see the culprit DOM elements:
+
+
+
+So we have a list <ul></ul> with items <li> one for each of Reply, Retweet, Favorite and More. Inside every of them they have a <a>(anchor that processes the click action), deeper we have a <span> that becomes the icon, and finally followed by the ugly text wrapped in <b>. That looks easy enough, we will find all these elements based on their  class attribute, descend down to find the text and get rid of it.  So we create a new folder for TwitterClean extension, copy paste some manifest boring code and set it up to load a javascript file anytime twitter loads. For example, right after twitter.com page loads, lets execute:
+
+var clean_twitter = function(){
+  var ugly = [];
+  ugly.push('.action-reply-container');
+  ugly.push('.action-rt-container');
+  ugly.push('.action-del-container');
+  ugly.push('.action-fav-container');
+  ugly.push('.more-tweet-actions');
+
+  for(var i=0;i&lt;ugly.length;i++) {
+    var u = $(ugly[i]).find('b');
+    u.text('');
+  }
+}
+Load the Extension, refresh Twitter and poof! All the text is gone and we’re just left with the icons. These suffice. Oh and while we’re at code we run automatically on load of twitter.com, lets slip this one is as well:
+
+$('.promoted-tweet').hide(); // oops!
+I’ll let you figure out what that single naughty line of code does for you :)
+
+Loading new tweets automatically
+Here’s another annoyance: you have your Twitter running on your side monitor and new tweets come in, but Twitter doesn’t load them automatically! It just shows this:
+
+
+
+That’s the passive aggressive look of Twitter telling you that there are two more tweets to show, but also refusing to actually show them. That would be too useful to their users. Instead, they want you to stop what you’re doing and click the button to load the new tweets. Luckily, you are skilled at extension hacking so you can simply right click the caption, go to Inspect Element, and see that the <div> element that tells you there are more tweets has class “js-new-tweets-bar”. Easy enough:
+
+var periodic = function() {
+  L = document.getElementsByClassName('js-new-tweets-bar');
+  if(L.length > 0){
+    L[0].click();
+  }
+}
+setInterval(periodic, 1000);
+When this gets run when twitter.com loads, it sets up the code to look for the annoying bar every second (1000 milliseconds) and then runs its click event handler which loads the new tweets. That’s all it takes, and now your tweets are streaming down automatically whenever they are available without you having to explicitly refresh them all the time. We’ve only written code for 5 minutes and in that time we tweaked the way Twitter looked, removed some “functionality” and added some functionality! We’re on a roll! Let’s do something fancier now.
+
+Highlighting tweets from rare tweeters (wait, or tweepers?)
+One day I decided to collect tweets on my timeline over a period of a week using Twitter’s REST API and saw that 30 accounts make up 50% of everything I see on Twitter. Since I follow 384 accounts in total, that’s only 7%! Unfortunately, for Twitter every tweet is created equal, which means that this annoying social media guru person who tweets 100 times a day completely drowns tweets coming from your other friends who believe that one should also have something worthy of tweeting too. Okay well it’s not exactly like that but I wished there was a mechanism for highlighting the very infrequent tweeters and seeing that low frequency content. Twitter will never implement this because it makes Zero sense for their revenue model, but luckily, we can hack this together quite easily! First, here’s a function that goes through all tweets on your timeline, looks at who tweeted, and “charges” every unique tweet to the originating user:
+
+var charge_tweets = function() {
+
+  // get all tweets in twitter timeline
+  var items = $('.tweet');
+  for(var i=0;i&lt;items.length;i++) {
+    var it = items[i];
+
+    // extract information from tweet HTML
+    var original_user = $(it).attr('data-screen-name');
+    var retweeter = $(it).attr('data-retweeter');
+    var tweet_id = $(it).attr('data-tweet-id');
+
+    // a bit of logic
+    var charged_user = original_user;
+    if(typeof retweeter !== 'undefined') {
+      charged_user = retweeter;
+    }
+
+    // charge tweet to the user
+    if(charge.hasOwnProperty(charged_user)) {
+      var L = charge[charged_user];
+      if($.inArray(tweet_id, L) === -1) {
+        L.push(tweet_id);  
+      }
+    } else {
+      charge[charged_user] = [tweet_id];
+    }
+  }
+};
+Basically, it turns out every tweet has class “tweet”, so it is trivial to iterate over them as seen above. Similarly, by inspecting the way the HTML is laid out, it turns out we can simply scrape the user and the (unique) tweet id and use it to build up a dictionary of user_string -> [tweet id, ...]. Of course, we will have to let this accumulate for a few days before it measures a good tweeting frequency distribution for all people we follow as we visit Twitter again and again always seeing new tweets from more people. But this also means we have to load and save the charge dictionary from Chrome’s local extension storage or otherwise we would lose all our charging work whenever we close the Tab! Easy enough:
+
+var save_charge = function() {
+  chrome.storage.local.set({'charge': charge});
+}
+
+var load_charge = function() {
+  chrome.storage.local.get('charge', function (result) {
+    if(result.charge) {
+      charge = result.charge;
+      console.log('loaded tweet frequency stats:');
+      console.log(charge);
+    } else {
+      console.log('no tweet frequency to load');
+    }
+  });
+}
+Now we just make sure to run load_charge() at start up, and save_charge() anytime there are new tweets and our charge dictionary changes. Based on this charge dictionary we can easily find, say, the 50th percentile frequency, and highlight any tweet that comes from a user who tweets less often than 50% of the users we follow:
+
+var display_charges = function() {
+
+  var items = $('.tweet');
+  for(var i=0;i&lt;items.length;i++) {
+    var it = items[i];
+
+    // ... as above and then:
+
+    var charged_tweets = charge[charged_user];
+    var charge_count = charged_tweets.length;
+
+    // adjust highlight color of the tweet according to rareness
+    if(charge_percentile &gt; 0) {
+      var ratio = charge_count / charge_percentile;
+      var x = Math.floor(Math.min(ratio,1)*255);
+      $(it).css('background-color', 'rgb(255,255,' + x + ')');
+    }
+  }
+}
+This is just one possibility out of many. Here, ratio will be low for users who rarely tweet, and we’re setting their tweet to be yellow based on their rareness. Very hard to not notice on your timeline! :) And while we’re at it, why not also fit in:
+
+var VIP = ['elonmusk'];
+if($.inArray(charged_user, VIP) !== -1) {
+  $(it).css('background-color', 'rgb(150,255,150)'); 
+}
+This way, Elon Musk’s (or your other Twitter favorites) tweets will always glow a vibrant, green color that is hard to notice! Nice. Here’s what we get:
+
+
+
+Just look at that! Mashable and some person who needed every single one of his followers to know “Aarrrgh” look normal, Elon’s tweets are hard to miss green, and someone who doesn’t tweet relatively as often is highlighted a bit as yellow.
+
+Summary
+It took us ~100 lines and 10 minutes of Javascript (with a bit of practice) and we tweaked Twitter’s look, removed err… undesirable content, made Twitter autorefresh, and added an entirely new feature that highlights infrequent tweepers!
+
+Yet we’ve only barely scratched the surface. If you’re  comfortable with navigating HTML of pages with Chrome’s awesome inspector and writing HTML/Javascript/CSS, these quick hacks have the potential to significantly improve your online experience by giving you powerful options for customizing your favorite sites. And if you are not comfortable, perhaps it’s time to head over to Chrome Extensions “Getting Started” and write a few hacks :)
+
+Oh, and if you’d like the full code of the above, you may find it here: LINK (Note it is a bit rough around the edges, but then it is a quick hack after all!). Let me know if you have any issues on @karpathy, and until later!
+
+
+Andrej Karpathy blog
+ karpathy
+ karpathy
+Musings of a Computer Scientist.

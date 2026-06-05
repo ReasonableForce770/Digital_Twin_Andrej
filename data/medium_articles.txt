@@ -1,0 +1,1793 @@
+
+Search
+
+Get app
+Write
+Sign up
+
+Sign in
+
+
+Unknown user
+
+1
+
+
+1
+
+
+1
+
+
+1
+
+
+1
+
+
+1
+
+
+1
+
+Software 2.0
+Andrej Karpathy
+Andrej Karpathy
+
+Follow
+9 min read
+·
+Nov 12, 2017
+60K
+
+
+192
+
+6
+
+
+
+I sometimes see people refer to neural networks as just “another tool in your machine learning toolbox”. They have some pros and cons, they work here or there, and sometimes you can use them to win Kaggle competitions. Unfortunately, this interpretation completely misses the forest for the trees. Neural networks are not just another classifier, they represent the beginning of a fundamental shift in how we develop software. They are Software 2.0.
+
+The “classical stack” of Software 1.0 is what we’re all familiar with — it is written in languages such as Python, C++, etc. It consists of explicit instructions to the computer written by a programmer. By writing each line of code, the programmer identifies a specific point in program space with some desirable behavior.
+
+Press enter or click to view image in full size
+
+In contrast, Software 2.0 is written in much more abstract, human unfriendly language, such as the weights of a neural network. No human is involved in writing this code because there are a lot of weights (typical networks might have millions), and coding directly in weights is kind of hard (I tried).
+
+Press enter or click to view image in full size
+
+Instead, our approach is to specify some goal on the behavior of a desirable program (e.g., “satisfy a dataset of input output pairs of examples”, or “win a game of Go”), write a rough skeleton of the code (i.e. a neural net architecture) that identifies a subset of program space to search, and use the computational resources at our disposal to search this space for a program that works. In the case of neural networks, we restrict the search to a continuous subset of the program space where the search process can be made (somewhat surprisingly) efficient with backpropagation and stochastic gradient descent.
+
+Press enter or click to view image in full size
+
+To make the analogy explicit, in Software 1.0, human-engineered source code (e.g. some .cpp files) is compiled into a binary that does useful work. In Software 2.0 most often the source code comprises 1) the dataset that defines the desirable behavior and 2) the neural net architecture that gives the rough skeleton of the code, but with many details (the weights) to be filled in. The process of training the neural network compiles the dataset into the binary — the final neural network. In most practical applications today, the neural net architectures and the training systems are increasingly standardized into a commodity, so most of the active “software development” takes the form of curating, growing, massaging and cleaning labeled datasets. This is fundamentally altering the programming paradigm by which we iterate on our software, as the teams split in two: the 2.0 programmers (data labelers) edit and grow the datasets, while a few 1.0 programmers maintain and iterate on the surrounding training code infrastructure, analytics, visualizations and labeling interfaces.
+
+It turns out that a large portion of real-world problems have the property that it is significantly easier to collect the data (or more generally, identify a desirable behavior) than to explicitly write the program. Because of this and many other benefits of Software 2.0 programs that I will go into below, we are witnessing a massive transition across the industry where of a lot of 1.0 code is being ported into 2.0 code. Software (1.0) is eating the world, and now AI (Software 2.0) is eating software.
+
+Ongoing transition
+Let’s briefly examine some concrete examples of this ongoing transition. In each of these areas we’ve seen improvements over the last few years when we give up on trying to address a complex problem by writing explicit code and instead transition the code into the 2.0 stack.
+
+Visual Recognition used to consist of engineered features with a bit of machine learning sprinkled on top at the end (e.g., an SVM). Since then, we discovered much more powerful visual features by obtaining large datasets (e.g. ImageNet) and searching in the space of Convolutional Neural Network architectures. More recently, we don’t even trust ourselves to hand-code the architectures and we’ve begun searching over those as well.
+
+Speech recognition used to involve a lot of preprocessing, gaussian mixture models and hidden markov models, but today consist almost entirely of neural net stuff. A very related, often cited humorous quote attributed to Fred Jelinek from 1985 reads “Every time I fire a linguist, the performance of our speech recognition system goes up”.
+
+Speech synthesis has historically been approached with various stitching mechanisms, but today the state of the art models are large ConvNets (e.g. WaveNet) that produce raw audio signal outputs.
+
+Machine Translation has usually been approaches with phrase-based statistical techniques, but neural networks are quickly becoming dominant. My favorite architectures are trained in the multilingual setting, where a single model translates from any source language to any target language, and in weakly supervised (or entirely unsupervised) settings.
+
+Games. Explicitly hand-coded Go playing programs have been developed for a long while, but AlphaGo Zero (a ConvNet that looks at the raw state of the board and plays a move) has now become by far the strongest player of the game. I expect we’re going to see very similar results in other areas, e.g. DOTA 2, or StarCraft.
+
+Databases. More traditional systems outside of Artificial Intelligence are also seeing early hints of a transition. For instance, “The Case for Learned Index Structures” replaces core components of a data management system with a neural network, outperforming cache-optimized B-Trees by up to 70% in speed while saving an order-of-magnitude in memory.
+
+You’ll notice that many of my links above involve work done at Google. This is because Google is currently at the forefront of re-writing large chunks of itself into Software 2.0 code. “One model to rule them all” provides an early sketch of what this might look like, where the statistical strength of the individual domains is amalgamated into one consistent understanding of the world.
+
+The benefits of Software 2.0
+Why should we prefer to port complex programs into Software 2.0? Clearly, one easy answer is that they work better in practice. However, there are a lot of other convenient reasons to prefer this stack. Let’s take a look at some of the benefits of Software 2.0 (think: a ConvNet) compared to Software 1.0 (think: a production-level C++ code base). Software 2.0 is:
+
+Get Andrej Karpathy’s stories in your inbox
+Join Medium for free to get updates from this writer.
+
+Enter your email
+Subscribe
+
+Remember me for faster sign in
+
+Computationally homogeneous. A typical neural network is, to the first order, made up of a sandwich of only two operations: matrix multiplication and thresholding at zero (ReLU). Compare that with the instruction set of classical software, which is significantly more heterogenous and complex. Because you only have to provide Software 1.0 implementation for a small number of the core computational primitives (e.g. matrix multiply), it is much easier to make various correctness/performance guarantees.
+
+Simple to bake into silicon. As a corollary, since the instruction set of a neural network is relatively small, it is significantly easier to implement these networks much closer to silicon, e.g. with custom ASICs, neuromorphic chips, and so on. The world will change when low-powered intelligence becomes pervasive around us. E.g., small, inexpensive chips could come with a pretrained ConvNet, a speech recognizer, and a WaveNet speech synthesis network all integrated in a small protobrain that you can attach to stuff.
+
+Constant running time. Every iteration of a typical neural net forward pass takes exactly the same amount of FLOPS. There is zero variability based on the different execution paths your code could take through some sprawling C++ code base. Of course, you could have dynamic compute graphs but the execution flow is normally still significantly constrained. This way we are also almost guaranteed to never find ourselves in unintended infinite loops.
+
+Constant memory use. Related to the above, there is no dynamically allocated memory anywhere so there is also little possibility of swapping to disk, or memory leaks that you have to hunt down in your code.
+
+It is highly portable. A sequence of matrix multiplies is significantly easier to run on arbitrary computational configurations compared to classical binaries or scripts.
+
+It is very agile. If you had a C++ code and someone wanted you to make it twice as fast (at cost of performance if needed), it would be highly non-trivial to tune the system for the new spec. However, in Software 2.0 we can take our network, remove half of the channels, retrain, and there — it runs exactly at twice the speed and works a bit worse. It’s magic. Conversely, if you happen to get more data/compute, you can immediately make your program work better just by adding more channels and retraining.
+
+Modules can meld into an optimal whole. Our software is often decomposed into modules that communicate through public functions, APIs, or endpoints. However, if two Software 2.0 modules that were originally trained separately interact, we can easily backpropagate through the whole. Think about how amazing it could be if your web browser could automatically re-design the low-level system instructions 10 stacks down to achieve a higher efficiency in loading web pages. Or if the computer vision library (e.g. OpenCV) you imported could be auto-tuned on your specific data. With 2.0, this is the default behavior.
+
+It is better than you. Finally, and most importantly, a neural network is a better piece of code than anything you or I can come up with in a large fraction of valuable verticals, which currently at the very least involve anything to do with images/video and sound/speech.
+
+The limitations of Software 2.0
+The 2.0 stack also has some of its own disadvantages. At the end of the optimization we’re left with large networks that work well, but it’s very hard to tell how. Across many applications areas, we’ll be left with a choice of using a 90% accurate model we understand, or 99% accurate model we don’t.
+
+The 2.0 stack can fail in unintuitive and embarrassing ways ,or worse, they can “silently fail”, e.g., by silently adopting biases in their training data, which are very difficult to properly analyze and examine when their sizes are easily in the millions in most cases.
+
+Finally, we’re still discovering some of the peculiar properties of this stack. For instance, the existence of adversarial examples and attacks highlights the unintuitive nature of this stack.
+
+Programming in the 2.0 stack
+Software 1.0 is code we write. Software 2.0 is code written by the optimization based on an evaluation criterion (such as “classify this training data correctly”). It is likely that any setting where the program is not obvious but one can repeatedly evaluate the performance of it (e.g. — did you classify some images correctly? do you win games of Go?) will be subject to this transition, because the optimization can find much better code than what a human can write.
+
+
+The lens through which we view trends matters. If you recognize Software 2.0 as a new and emerging programming paradigm instead of simply treating neural networks as a pretty good classifier in the class of machine learning techniques, the extrapolations become more obvious, and it’s clear that there is much more work to do.
+
+In particular, we’ve built up a vast amount of tooling that assists humans in writing 1.0 code, such as powerful IDEs with features like syntax highlighting, debuggers, profilers, go to def, git integration, etc. In the 2.0 stack, the programming is done by accumulating, massaging and cleaning datasets. For example, when the network fails in some hard or rare cases, we do not fix those predictions by writing code, but by including more labeled examples of those cases. Who is going to develop the first Software 2.0 IDEs, which help with all of the workflows in accumulating, visualizing, cleaning, labeling, and sourcing datasets? Perhaps the IDE bubbles up images that the network suspects are mislabeled based on the per-example loss, or assists in labeling by seeding labels with predictions, or suggests useful examples to label based on the uncertainty of the network’s predictions.
+
+Similarly, Github is a very successful home for Software 1.0 code. Is there space for a Software 2.0 Github? In this case repositories are datasets and commits are made up of additions and edits of the labels.
+
+Traditional package managers and related serving infrastructure like pip, conda, docker, etc. help us more easily deploy and compose binaries. How do we effectively deploy, share, import and work with Software 2.0 binaries? What is the conda equivalent for neural networks?
+
+In the short term, Software 2.0 will become increasingly prevalent in any domain where repeated evaluation is possible and cheap, and where the algorithm itself is difficult to design explicitly. There are many exciting opportunities to consider the entire software development ecosystem and how it can be adapted to this new programming paradigm. And in the long run, the future of this paradigm is bright because it is increasingly clear that when we develop AGI, it will certainly be written in Software 2.0.
+
+Machine Learning
+Artificial Intelligence
+Programming
+Software Development
+Future
+60K
+
+
+192
+
+6
+
+
+Andrej Karpathy
+Written by Andrej Karpathy
+60K followers
+·
+186 following
+I like to train deep neural nets on large datasets.
+
+
+Follow
+Responses (192)
+Unknown user
+Write a response
+
+What are your thoughts?
+
+Cancel
+Respond
+Doğan Ulus
+Doğan Ulus
+
+Nov 12, 2017
+
+
+I think this post makes an old mistake. This mistake is the dream of the universal homogeneous solution.
+In the beginning of the last century, a handful of great minds had the same mistake. They wanted the Mathematics 2.0, which would be entirely…more
+1.2K
+
+
+8 replies
+
+Reply
+
+Lefty Goldblatt
+Lefty Goldblatt
+
+Nov 13, 2017
+
+
+This article is all a bit breathless and an example of “when all you have is a hammer, everything looks like a nail”.
+This quote “ It is better than you. Finally, and most importantly, a neural network is a better piece of code than anything you or I…more
+994
+
+
+4 replies
+
+Reply
+
+gizmohan
+gizmohan
+
+Nov 12, 2017
+
+
+Enterprise Software is more than the areas you mentioned and that still is in Software 0.5 :).
+137
+
+
+1 reply
+
+Reply
+
+See all responses
+More from Andrej Karpathy
+Yes you should understand backprop
+Andrej Karpathy
+Andrej Karpathy
+
+·
+
+Dec 20, 2016
+
+Yes you should understand backprop
+When we offered CS231n (Deep Learning class) at Stanford, we intentionally designed the programming assignments to include explicit…
+20K
+49
+AlphaGo, in context
+Andrej Karpathy
+Andrej Karpathy
+
+·
+
+Jun 1, 2017
+
+AlphaGo, in context
+Update Oct 18, 2017: AlphaGo Zero was announced. This post refers to the previous version. 95% of it still applies.
+2.7K
+18
+A Peek at Trends in Machine Learning
+Andrej Karpathy
+Andrej Karpathy
+
+·
+
+Apr 7, 2017
+
+A Peek at Trends in Machine Learning
+Have you looked at Google Trends? It’s pretty cool — you enter some keywords and see how Google Searches of that term vary through time. I…
+3K
+10
+Virtual Reality: still not quite there, again.
+Andrej Karpathy
+Andrej Karpathy
+
+·
+
+Jan 18, 2017
+
+Virtual Reality: still not quite there, again.
+The first time I tried out Virtual Reality was a while ago — somewhere in the late 1990's. I was quite young so my memory is a bit hazy…
+841
+19
+See all from Andrej Karpathy
+Recommended from Medium
+MCP is Dead
+UX Planet
+In
+
+UX Planet
+
+by
+
+Nick Babich
+
+·
+
+Apr 6
+
+MCP is Dead
+Why you should avoid using MCP in Claude Code and what to use instead
+
+3.5K
+203
+88
+I Wasted 6 Months Using Claude Code Wrong. Here Are the 14 Commands That Changed Everything.
+Towards AI
+In
+
+Towards AI
+
+by
+
+Mouez Yazidi
+
+·
+
+Apr 26
+
+I Wasted 6 Months Using Claude Code Wrong. Here Are the 14 Commands That Changed Everything.
+From frustrated beginner to power user: The hidden command ecosystem nobody talks about.
+
+1.6K
+36
+45
+A high-contrast digital graphic with a dark, ethereal blue and purple background. Large, glowing cyan text in the center reads “USING LLMs IS A SKILL.” Below the text are three minimalist neon icons: a stack of books with a quill, a castle tower, and a human brain merged with mechanical gears. Small text at the bottom reads “Based on ‘Learning the Art’ concept.”
+Leo Godin
+Leo Godin
+
+·
+
+Mar 2
+
+Claude Code is Great
+You Just Need to Learn How to Use It
+
+5K
+146
+81
+Using spec-driven development with Claude Code
+Heeki Park
+Heeki Park
+
+·
+
+Mar 1
+
+Using spec-driven development with Claude Code
+I no longer write code by hand. I wouldn’t call myself a proper software development engineer by trade, nor have I deployed large-scale…
+947
+20
+6
+I Failed Uber’s System Design Interview Last Month. Here’s Every Question They Asked.
+Emily
+Emily
+
+·
+
+Feb 21
+
+I Failed Uber’s System Design Interview Last Month. Here’s Every Question They Asked.
+It was much harder and the rejection email taught me more than any LeetCode grind ever could.
+2.7K
+60
+7
+A Single CLAUDE.md File Went Viral. The Reason Is Embarrassingly Simple.
+Towards Deep Learning
+In
+
+Towards Deep Learning
+
+by
+
+Sumit Pandey
+
+·
+
+May 8
+
+A Single CLAUDE.md File Went Viral. The Reason Is Embarrassingly Simple.
+91,000 stars on GitHub. No code. Four rules from Andrej Karpathy that every coding agent should have been following from day one.
+
+2.7K
+37
+48
+See more recommendations
+Help
+
+Status
+
+About
+
+Careers
+
+Press
+
+Blog
+
+Privacy
+
+Rules
+
+Terms
+
+Text to speech
+Search
+
+Get app
+Write
+Sign up
+
+Sign in
+
+
+Unknown user
+
+2
+
+Top highlight
+
+
+1
+
+AlphaGo, in context
+Andrej Karpathy
+Andrej Karpathy
+
+Follow
+5 min read
+·
+Jun 1, 2017
+2.7K
+
+
+18
+
+
+
+Press enter or click to view image in full size
+
+Update Oct 18, 2017: AlphaGo Zero was announced. This post refers to the previous version. 95% of it still applies.
+
+Get Andrej Karpathy’s stories in your inbox
+Join Medium for free to get updates from this writer.
+
+Enter your email
+Subscribe
+
+Remember me for faster sign in
+
+I had a chance to talk to several people about the recent AlphaGo matches with Ke Jie and others. In particular, most of the coverage was a mix of popular science + PR so the most common questions I’ve seen were along the lines of “to what extent is AlphaGo a breakthrough?”, “How do researchers in AI see its victories?” and “what implications do the wins have?”. I thought I might as well serialize some of my thoughts into a post.
+
+The cool parts
+AlphaGo is made up of a number of relatively standard techniques: behavior cloning (supervised learning on human demonstration data), reinforcement learning (REINFORCE), value functions, and Monte Carlo Tree Search (MCTS). However, the way these components are combined is novel and not exactly standard. In particular, AlphaGo uses a SL (supervised learning) policy to initialize the learning of an RL (reinforcement learning) policy that gets perfected with self-play, which they then estimate a value function from, which then plugs into MCTS that (somewhat surprisingly) uses the (worse!, but more diverse) SL policy to sample rollouts. In addition, the policy/value nets are deep neural networks, so getting everything to work properly presents its own unique challenges (e.g. value function is trained in a tricky way to prevent overfitting). On all of these aspects, DeepMind has executed very well. That being said, AlphaGo does not by itself use any fundamental algorithmic breakthroughs in how we approach RL problems.
+
+Press enter or click to view image in full size
+
+On narrowness
+Zooming out, it is also still the case that AlphaGo is a narrow AI system that can play Go and that’s it. The ATARI-playing agents from DeepMind do not use the approach taken with AlphaGo. The Neural Turing Machine has little to do with AlphaGo. The Google datacenter improvements definitely do not use AlphaGo. The Google Search engine is not going to use AlphaGo. Therefore, AlphaGo does not generalize to any problem outside of Go, but the people and the underlying neural network components do, and do so much more effectively than in the days of old AI where each demonstration needed repositories of specialized, explicit code.
+
+Convenient properties of Go
+I wanted to expand on the narrowness of AlphaGo by explicitly trying to list some of the specific properties that Go has, which AlphaGo benefits a lot from. This can help us think about what settings AlphaGo does or does not generalize to. Go is:
+
+fully deterministic. There is no noise in the rules of the game; if the two players take the same sequence of actions, the states along the way will always be the same.
+fully observed. Each player has complete information and there are no hidden variables. For example, Texas hold’em does not satisfy this property because you cannot see the cards of the other player.
+the action space is discrete. a number of unique moves are available. In contrast, in robotics you might want to instead emit continuous-valued torques at each joint.
+we have access to a perfect simulator (the game itself), so the effects of any action are known exactly. This is a strong assumption that AlphaGo relies on quite strongly, but is also quite rare in other real-world problems.
+each episode/game is relatively short, of approximately 200 actions. This is a relatively short time horizon compared to other RL settings which may involve thousands (or more) of actions per episode.
+the evaluation is clear, fast and allows a lot of trial-and-error experience. In other words, the agent can experience winning/losing millions of times, which allows is to learn, slowly but surely, as is common with deep neural network optimization.
+there are huge datasets of human play game data available to bootstrap the learning, so AlphaGo doesn’t have to start from scratch.
+Example: AlphaGo applied to robotics?
+Press enter or click to view image in full size
+
+Having enumerated some of the appealing properties of Go, let’s look at a robotics problem and see how well we could apply AlphaGo to, for example, an Amazon Picking Challenge robot. It’s a little comical to even think about.
+
+First, your (high-dimensional, continuous) actions are awkwardly /noisily executed by the robot’s motors (1,3 are violated).
+The robot might have to look around for the items that are to be moved, so it doesn’t always sense all the relevant information and has to sometimes collect it on demand. (2 is violated)
+We might have a physics simulator, but these are quite imperfect (especially for simulating things like contact forces); this brings its own set of non-trivial challenges (4 is violated).
+Depending on how abstract your action space is (raw torques -> positions of the gripper), a successful episode can be much longer than 200 actions (i.e. 5 depends on the setting). Longer episodes add to the credit assignment problem, where it is difficult for the learning algorithm to distribute blame among the actions for any outcome.
+It would be much harder for a robot to practice (succeed/fail) at something millions of times, because we’re operating in the real world. One approach might be to parallelize robots, but that can be quite expensive. Also, a robot failing might involve the robot actually damaging itself. Another approach would be to use a simulator and then transfer to the real world, but this brings its own set of new, non-trivial challenges in the domain transfer. Lastly, in many cases evaluation is very non-trivial. For example, how do you automatically evaluate if a robot has succeeded in making an omelette? (6 is violated).
+There is rarely a human data source with millions of demonstrations (so 7 is violated).
+In short, basically every single assumption that Go satisfies and that AlphaGo takes advantage of are violated, and any successful approach would look extremely different. More generally, some of Go’s properties above are not insurmountable with current algorithms (e.g. 1,2,3), some are somewhat problematic (5,7), but some are quite critical to how AlphaGo is trained but are rarely present in other real-world applications (4,6).
+
+In conclusion
+While AlphaGo does not introduce fundamental breakthroughs in AI algorithmically, and while it is still an example of narrow AI, AlphaGo does symbolize Alphabet’s AI power: in both the quantity/quality of the talent present in the company, the computational resources at their disposal, and the all in focus on AI from the very top.
+
+Alphabet is making a large bet on AI, and it is a safe one. But I’m biased :)
+
+EDIT: the goal of this post is, as someone on reddit mentioned, “quelling the ever resilient beliefs of the public that AGI is right down the road”, and the target audience are people outside of AI who were watching AlphaGo and would like a more technical commentary.
+
+Machine Learning
+Alphago
+Baduk
+Artificial Intelligence
+Deep Learning
+2.7K
+
+
+18
+
+
+Andrej Karpathy
+Written by Andrej Karpathy
+60K followers
+·
+186 following
+I like to train deep neural nets on large datasets.
+
+
+Follow
+Help
+
+Status
+
+About
+
+Careers
+
+Press
+
+Blog
+
+Privacy
+
+Rules
+
+Terms
+
+Text to speech
+Search
+
+Get app
+Write
+Sign up
+
+Sign in
+
+
+Unknown user
+Top highlight
+
+
+1
+
+ICML accepted papers institution stats
+Andrej Karpathy
+Andrej Karpathy
+
+Follow
+2 min read
+·
+May 25, 2017
+864
+
+
+8
+
+
+
+The accepted papers at ICML have been published. ICML is a top Machine Learning conference, and one of the most relevant to Deep Learning, although NIPS has a longer DL tradition and ICLR, being more focused, has a much higher DL density.
+
+Most mentioned institutions
+I thought it would be fun to compute some stats on institutions. Armed with Jupyter Notebook and regex, we look for all of the institution mentions, add up their counts and sort. Modulo a few annoyances:
+
+I manually collapse e.g. “Google”, “Google Inc.”, “Google Brain”, “Google Research” into one category, or “Stanford” and “Stanford University”.
+I only count up one unique mention of an institution on each paper, so if a paper has 20 people from a single institution this gets collapsed to a single mention. This way we get a better understanding of which institutions are involved on each paper in the conference.
+In total we get 961 institution mentions, 420 unique. The top 30 are:
+
+#mentions institution
+---------------------
+       44 Google
+       33 Microsoft
+       32 CMU
+       25 DeepMind
+       23 MIT
+       22 Berkeley
+       22 Stanford
+       16 Cambridge
+       16 Princeton
+       15 None
+       14 Georgia Tech
+       13 Oxford
+       11 UT Austin
+       10 Duke
+       10 Facebook
+        9 ETH Zurich
+        9 EPFL
+        8 Columbia
+        8 Harvard
+        8 Michigan
+        7 UCSD
+        7 IBM
+        7 New York
+        7 Peking
+        6 Cornell
+        6 Washington
+        6 Minnesota
+        5 Virginia
+        5 Weizmann Institute of Science
+        5 Microsoft / Princeton / IAS
+I’m not quite sure about “None” (15) in there. It’s listed as an institution on the ICML page and I can’t tell if they have a bug or if that’s a real cool new AI institution we don’t yet know about.
+
+Industry vs. Academia
+To get an idea of how much of the research is done at industry, I took the counts for the largest industry labs (DeepMind, Google, Microsoft, Facebook, IBM, Disney, Amazon, Adobe) and divide by the total. We get 14%, but this doesn’t capture the looong tail. Looking through the tail, I think it’s fair to say that
+
+about 20–25% of papers have an industry involvement.
+
+or rather, approximately three quarters of all papers at ICML have come entirely out of Academia. Also, since DeepMind/Google are both Alphabet, we can put them together (giving 60 total), and see that
+
+6.3% of ICML papers have a Google/DeepMind author.
+
+It would be fun to run this analysis over time. Back when I started my PhD (~2011), industry research was not as prevalent. It was common to see in Graphics (e.g. Adobe / Disney / etc), but not as much in AI / Machine Learning. A lot of that has changed and from purely subjective observation, the industry involvement has increased dramatically. However, Academia is still doing really well and contributes a large fraction (~75%) of the papers.
+
+Get Andrej Karpathy’s stories in your inbox
+Join Medium for free to get updates from this writer.
+
+Enter your email
+Subscribe
+
+Remember me for faster sign in
+
+cool!
+
+EDIT 1: fixed an error where previously the Alphabet stat above read 10% because I incorrectly added the numbers of DM and Google, instead of properly collapsing them to a single Alphabet entity.
+EDIT 2: some more discussion and numbers on r/ML thread too.
+
+Machine Learning
+864
+
+
+8
+
+
+Andrej Karpathy
+Written by Andrej Karpathy
+60K followers
+·
+186 following
+I like to train deep neural nets on large datasets.
+
+
+Follow
+Help
+
+Status
+
+About
+
+Careers
+
+Press
+
+Blog
+
+Privacy
+
+Rules
+
+Terms
+
+Text to speech
+Search
+
+Get app
+Write
+Sign up
+
+Sign in
+
+
+Unknown user
+Top highlight
+
+A Peek at Trends in Machine Learning
+Andrej Karpathy
+Andrej Karpathy
+
+Follow
+6 min read
+·
+Apr 7, 2017
+3K
+
+
+10
+
+
+
+Have you looked at Google Trends? It’s pretty cool — you enter some keywords and see how Google Searches of that term vary through time. I thought — hey, I happen to have this arxiv-sanity database of 28,303 (arxiv) Machine Learning papers over the last 5 years, so why not do something similar and take a look at how Machine Learning research has evolved over the last 5 years? The results are fairly fun, so I thought I’d post.
+
+(Edit: machine learning is a large area. A good chunk of this post is about deep learning specifically, which is the subarea I am most familiar with.)
+
+The arxiv singularity
+Let’s first look at the total number of submitted papers across the arxiv-sanity categories (cs.AI,cs.LG,cs.CV,cs.CL,cs.NE,stat.ML), over time. We get the following:
+
+Press enter or click to view image in full size
+
+Yes, March of 2017 saw almost 2,000 submissions in these areas. The peaks are likely due to conference deadlines (e.g. NIPS/ICML). Note that this is not directly a statement about the size of the area itself, since not everyone submits their paper to arxiv, and the fraction of people who do likely changes over time. But the point remains — that’s a lot of papers to be aware of, skim, or (gasp) read.
+
+Get Andrej Karpathy’s stories in your inbox
+Join Medium for free to get updates from this writer.
+
+Enter your email
+Subscribe
+
+Remember me for faster sign in
+
+This total number of papers will serve as the denominator. We can now look at what fraction of papers contain certain keywords of interest.
+
+Deep Learning Frameworks
+To warm up let’s look at the Deep Learning frameworks that are in use. To compute this, we record the fraction of papers that mention the framework somewhere in the full text (anywhere — including bibliography etc). For papers uploaded on March 2017, we get the following:
+
+% of papers 	 framework 	 has been around for (months)
+------------------------------------------------------------
+    9.1          tensorflow       16
+    7.1               caffe       37
+    4.6              theano       54
+    3.3               torch       37
+    2.5               keras       19
+    1.7          matconvnet       26
+    1.2             lasagne       23
+    0.5             chainer       16
+    0.3               mxnet       17
+    0.3                cntk       13
+    0.2             pytorch       1
+    0.1      deeplearning4j       14
+That is, 10% of all papers submitted in March 2017 mention TensorFlow. Of course, not every paper declares the framework used, but if we assume that papers declare the framework with some fixed random probability independent of the framework, then it looks like about 40% of the community is currently using TensorFlow (or a bit more, if you count Keras with the TF backend). And here is the plot of how some of the more popular frameworks evolved over time:
+
+Press enter or click to view image in full size
+
+We can see that Theano has been around for a while but its growth has somewhat stalled. Caffe shot up quickly in 2014, but was overtaken by the TensorFlow singularity in the last few months. Torch (and the very recent PyTorch) are also climbing up, slow and steady. It will be fun to watch this develop in the next few months — my own guess is that Caffe/Theano will go on a slow decline and TF growth will become a bit slower due to PyTorch.
+
+ConvNet Models
+For fun, how about if we look at common ConvNet models? Here, we can clearly see a huge spike up for ResNets, to the point that they occur in 9% of all papers last March:
+
+Press enter or click to view image in full size
+
+Also, who was talking about “inception” before the InceptionNet? Curious.
+
+Optimization algorithms
+In terms of optimization algorithms, it looks like Adam is on a roll, found in about 23% of papers! The actual fraction of use is hard to estimate; it’s likely higher than 23% because some papers don’t declare the optimization algorithm, and a good chunk of papers might not even be optimizing any neural network at all. It’s then likely lower by about 5%, which is the “background activity” of “Adam”, likely a collision with author names, as the Adam optimization algorithm was only released on Dec 2014.
+
+Press enter or click to view image in full size
+
+Researchers
+I was also curious to plot the mentions of some of the most senior PIs in Deep Learning (this gives something similar to citation count, but 1) it is more robust across population of papers with a “0/1” count, and 2) it is normalized by the total size of the pie):
+
+Press enter or click to view image in full size
+
+A few things to note: “bengio” is mentioned in 35% of all submissions, but there are two Bengios: Samy and Yoshua, who add up on this plot. In particular, Geoff Hinton is mentioned in more than 30% of all new papers! That seems like a lot.
+
+Hot or Not Keywords
+Finally, instead of manually going by categories of keywords, let’s actively look at the keywords that are “hot” (or not).
+
+Top hot keywords
+There are many ways to define this, but for this experiment I look at each unigram or bigram in all the papers and record the ratio of its max use last year compared to its max use up to last year. The papers that excel at this metric are those that one year ago were niche, but this year appear with a much higher relative frequency. The top list (slightly edited out some duplicates) comes out as follows:
+
+8.17394726486 resnet
+6.76767676768 tensorflow
+5.21818181818 gans
+5.0098386462 residual networks
+4.34787878788 adam
+2.95181818182 batch normalization
+2.61663993305 fcn
+2.47812783318 vgg16
+2.03636363636 style transfer
+1.99958217686 gated
+1.99057177616 deep reinforcement
+1.98428686543 lstm
+1.93700787402 nmt
+1.90606060606 inception
+1.8962962963 siamese
+1.88976377953 character level
+1.87533998187 region proposal
+1.81670721817 distillation
+1.81400378481 tree search
+1.78578069795 torch
+1.77685950413 policy gradient
+1.77370153867 encoder decoder
+1.74685427385 gru
+1.72430399325 word2vec
+1.71884293052 relu activation
+1.71459655485 visual question
+1.70471560525 image generation
+For example, ResNet’s ratio of 8.17 is because until 1 year ago it appeared in up to only 1.044% of all submissions (in Mar 2016), but last last month (Mar 2017) it appeared in 8.53% of submissions, so 8.53 / 1.044 ~= 8.17. So there you have it — the core innovations that became all the rage over the last year are 1) ResNets, 2) GANs, 3) Adam, 4) BatchNorm. Use more of these to fit in with your friends. In terms of research interests, we see 1) style transfer, 2) deep RL, 3) Neural Machine Translation (“nmt”), and perhaps 4) image generation. And architecturally, it is hot to use 1) Fully Convolutional Nets (FCN), 2) LSTMs/GRUs, 3) Siamese nets, and 4) Encoder decoder nets.
+
+Press enter or click to view image in full size
+
+Top not hot
+How about the reverse? What has seen many fewer submissions over the last year than has historically had a higher “mind share”? Here are a few:
+
+0.0462375339982 fractal
+0.112222705524 learning bayesian
+0.123531424661 ibp
+0.138351983723 texture analysis
+0.152810895084 bayesian network
+0.170535340862 differential evolution
+0.227932960894 wavelet transform
+0.24482875551 dirichlet process
+I’m not sure what “fractal” is referring to, but more generally it looks like bayesian nonparametrics are under attack.
+
+Conclusion
+Now is the time to submit paper on Fully Convolutional Encoder Decoder BatchNorm ResNet GAN applied to Style Transfer, optimized with Adam. Hey, that doesn’t even sound too far-fetched.
+
+:)
+
+Machine Learning
+Artificial Intelligence
+Deep Learning
+3K
+
+
+10
+
+
+Andrej Karpathy
+Written by Andrej Karpathy
+60K followers
+·
+186 following
+I like to train deep neural nets on large datasets.
+
+
+Follow
+Help
+
+Status
+
+About
+
+Careers
+
+Press
+
+Blog
+
+Privacy
+
+Rules
+
+Terms
+
+Text to speech
+Search
+
+Get app
+Write
+Sign up
+
+Sign in
+
+
+Unknown user
+Top highlight
+
+
+1
+
+CS183c Assignment #3
+Andrej Karpathy
+Andrej Karpathy
+
+Follow
+4 min read
+·
+Nov 15, 2015
+226
+
+
+3
+
+
+
+The last few weeks we heard from several excellent guests, including Selina Tobaccowala from Survey Monkey, Patrick Collison from Stripe, Nirav Tolia from Nextdoor, Shishir Mehrotra from Google, and Elizabeth Holmes from Theranos. The topic of discussion was scaling beyond the tribe phase to the Village/City phases of a company.
+
+My favorite among these was the session with Patrick (video), which I found to be rich with interesting points and mental models. In what follows I will try to do a brain dump of some of these ideas in my own words.
+
+On organizational structure (~20min mark)
+I found Patrick’s slight resentment of new organizational structure ideas refreshing and amusing. We hear a lot about disruption, thinking from first principles, being contrarian, etc. Patrick was trying to make the point that the mean organizational structure of a company that we’ve converged on (e.g. hierarchies etc.), and the way things are done is actually quite alright. That in fact we know a lot about how to organize groups of people towards a common goal, and that one must resist the temptation to be too clever with it. He also conceded that a lot of things have changed over the last several years (especially with respect to technology), but made the point that human psychology has in comparison stayed nearly constant, which means we can more confidently draw on past knowledge in these areas.
+
+This part was quite amusing because I felt like Patrick was being contrarian by defending the standard.
+
+On hiring (~28 min mark)
+Several interesting points — first, it has become meaningless to regurgitate the fact that hiring is very important. What that actually means when you want to translate it to a statement with actual bits of information, Patrick argues, is to rephrase it as “you have to be very very persistent” in recruiting the best people, and willing to to do it very slowly over time (e.g. they took 6 months to hire 2 employees early on).
+
+Another interesting analogy was in thinking of good people as airship carriers. Your job during hiring is to find them and steer them towards a direction, as opposed to thinking about it the other way around, where you try to find people aligned with your direction first and then build them up over time. The argument is in favor of the former order of precedence.
+
+Get Andrej Karpathy’s stories in your inbox
+Join Medium for free to get updates from this writer.
+
+Enter your email
+Subscribe
+
+Remember me for faster sign in
+
+The last point that resonated with me strongly was the realization that it is incorrect to think about hiring on an individual basis. When you’re hiring a person you’re in fact hiring an entire cone of people in expectation, because good people in an area attract more good people like them, dramatically reducing the barrier for another similar hire.
+
+Company communication
+I also really liked the idea that as the company grows more, the communication channels should tend toward writing more than talking. The comparison to the printing press was interesting, and the notion that what made writing so powerful was not only the dissemination, but also the concreteness and rigidity of written text. The fact that writing encourages the full serialization a concept, much more than a speech. The idea that you can point to paragraph 2, sentence 5 and say “no, that’s wrong”.
+
+The misc
+The entire conversation was peppered with interesting mental models for thinking about different facets of companies: The idea that an optimal 1-year plan can be very distinct from the optimal 5-year plan. The idea of Stripe as a blob in a philosophical space, and that different people within the organization are in different angles/distances with respect to its center of mass, and have to be actively pulled towards it. The 3 jobs of a CEO. etcetc.
+
+Misc misc
+There were also several other interesting insights from the other guests, which I will dump here in an unsorted form.
+
+The SurveyMonkey back story was fun to hear about — a great example of an organically rapidly growing company with huge profit margins. Also, an example of a company that may seem not too exciting until you think about it more. Selina also made the interesting observation that some people have preferences towards particular stages of the company, and that some might not scale, or not be willing to scale, up.
+
+Nirav described a very nice example of doing things that don’t scale with the early days of Nextdoor. They attracted only 170 neighborhoods in their first year, by hand. Nirav also mentioned an interesting concept of a “treadmill company” - a metaphor for a company where you can’t easily step back and enjoy the view — it requires constant struggle and active involvement. Finally, in terms of extracting value from customers without explicitly charging them Nirav mentioned two modes of operation: the demand fulfillment model (e.g. Google) and demand generation model (e.g. Facebook).
+
+Shishir brought up an interesting idea called the “tombstone test”, as a way of determining how to spend your time. In short, if you can’t imagine something being on your tombstone then it is not worth working on. Hm!
+
+That’s it! The insights I like the most are the ones that point out mental models that distill a situation to something that preserves most of its core dynamics, but is easier to think about. This distillation process cleans an idea, strips it from the irrelevant and preserves the core nugget of insight. The last few weeks were quite rich!
+
+Startup
+Entrepreneurship
+226
+
+
+3
+
+
+Andrej Karpathy
+Written by Andrej Karpathy
+60K followers
+·
+186 following
+I like to train deep neural nets on large datasets.
+
+
+Follow
+Help
+
+Status
+
+About
+
+Careers
+
+Press
+
+Blog
+
+Privacy
+
+Rules
+
+Terms
+
+Text to speech
+Search
+
+Get app
+Write
+Sign up
+
+Sign in
+
+
+Unknown user
+
+2
+
+
+1
+
+
+1
+
+Top highlight
+
+
+1
+
+
+1
+
+
+1
+
+Yes you should understand backprop
+Andrej Karpathy
+Andrej Karpathy
+
+Follow
+7 min read
+·
+Dec 20, 2016
+20K
+
+
+49
+
+
+
+When we offered CS231n (Deep Learning class) at Stanford, we intentionally designed the programming assignments to include explicit calculations involved in backpropagation on the lowest level. The students had to implement the forward and the backward pass of each layer in raw numpy. Inevitably, some students complained on the class message boards:
+
+“Why do we have to write the backward pass when frameworks in the real world, such as TensorFlow, compute them for you automatically?”
+
+This is seemingly a perfectly sensible appeal - if you’re never going to write backward passes once the class is over, why practice writing them? Are we just torturing the students for our own amusement? Some easy answers could make arguments along the lines of “it’s worth knowing what’s under the hood as an intellectual curiosity”, or perhaps “you might want to improve on the core algorithm later”, but there is a much stronger and practical argument, which I wanted to devote a whole post to:
+
+> The problem with Backpropagation is that it is a leaky abstraction.
+
+In other words, it is easy to fall into the trap of abstracting away the learning process — believing that you can simply stack arbitrary layers together and backprop will “magically make them work” on your data. So lets look at a few explicit examples where this is not the case in quite unintuitive ways.
+
+Press enter or click to view image in full size
+
+Some eye candy: a computational graph of a Batch Norm layer with a forward pass (black) and backward pass (red). (borrowed from this post)
+Vanishing gradients on sigmoids
+We’re starting off easy here. At one point it was fashionable to use sigmoid (or tanh) non-linearities in the fully connected layers. The tricky part people might not realize until they think about the backward pass is that if you are sloppy with the weight initialization or data preprocessing these non-linearities can “saturate” and entirely stop learning — your training loss will be flat and refuse to go down. For example, a fully connected layer with sigmoid non-linearity computes (using raw numpy):
+
+z = 1/(1 + np.exp(-np.dot(W, x))) # forward pass
+dx = np.dot(W.T, z*(1-z)) # backward pass: local gradient for x
+dW = np.outer(z*(1-z), x) # backward pass: local gradient for W
+If your weight matrix W is initialized too large, the output of the matrix multiply could have a very large range (e.g. numbers between -400 and 400), which will make all outputs in the vector z almost binary: either 1 or 0. But if that is the case, z*(1-z), which is local gradient of the sigmoid non-linearity, will in both cases become zero (“vanish”), making the gradient for both x and W be zero. The rest of the backward pass will come out all zero from this point on due to multiplication in the chain rule.
+
+Press enter or click to view image in full size
+
+Another non-obvious fun fact about sigmoid is that its local gradient (z*(1-z)) achieves a maximum at 0.25, when z = 0.5. That means that every time the gradient signal flows through a sigmoid gate, its magnitude always diminishes by one quarter (or more). If you’re using basic SGD, this would make the lower layers of a network train much slower than the higher ones.
+
+TLDR: if you’re using sigmoids or tanh non-linearities in your network and you understand backpropagation you should always be nervous about making sure that the initialization doesn’t cause them to be fully saturated. See a longer explanation in this CS231n lecture video.
+
+Dying ReLUs
+Another fun non-linearity is the ReLU, which thresholds neurons at zero from below. The forward and backward pass for a fully connected layer that uses ReLU would at the core include:
+
+z = np.maximum(0, np.dot(W, x)) # forward pass
+dW = np.outer(z > 0, x) # backward pass: local gradient for W
+If you stare at this for a while you’ll see that if a neuron gets clamped to zero in the forward pass (i.e. z=0, it doesn’t “fire”), then its weights will get zero gradient. This can lead to what is called the “dead ReLU” problem, where if a ReLU neuron is unfortunately initialized such that it never fires, or if a neuron’s weights ever get knocked off with a large update during training into this regime, then this neuron will remain permanently dead. It’s like permanent, irrecoverable brain damage. Sometimes you can forward the entire training set through a trained network and find that a large fraction (e.g. 40%) of your neurons were zero the entire time.
+
+Press enter or click to view image in full size
+
+TLDR: If you understand backpropagation and your network has ReLUs, you’re always nervous about dead ReLUs. These are neurons that never turn on for any example in your entire training set, and will remain permanently dead. Neurons can also die during training, usually as a symptom of aggressive learning rates. See a longer explanation in CS231n lecture video.
+
+Exploding gradients in RNNs
+Vanilla RNNs feature another good example of unintuitive effects of backpropagation. I’ll copy paste a slide from CS231n that has a simplified RNN that does not take any input x, and only computes the recurrence on the hidden state (equivalently, the input x could always be zero):
+
+Press enter or click to view image in full size
+
+This RNN is unrolled for T time steps. When you stare at what the backward pass is doing, you’ll see that the gradient signal going backwards in time through all the hidden states is always being multiplied by the same matrix (the recurrence matrix Whh), interspersed with non-linearity backprop.
+
+Get Andrej Karpathy’s stories in your inbox
+Join Medium for free to get updates from this writer.
+
+Enter your email
+Subscribe
+
+Remember me for faster sign in
+
+What happens when you take one number a and start multiplying it by some other number b (i.e. a*b*b*b*b*b*b…)? This sequence either goes to zero if |b| < 1, or explodes to infinity when |b|>1. The same thing happens in the backward pass of an RNN, except b is a matrix and not just a number, so we have to reason about its largest eigenvalue instead.
+
+TLDR: If you understand backpropagation and you’re using RNNs you are nervous about having to do gradient clipping, or you prefer to use an LSTM. See a longer explanation in this CS231n lecture video.
+
+Spotted in the Wild: DQN Clipping
+Lets look at one more — the one that actually inspired this post. Yesterday I was browsing for a Deep Q Learning implementation in TensorFlow (to see how others deal with computing the numpy equivalent of Q[:, a], where a is an integer vector — turns out this trivial operation is not supported in TF). Anyway, I searched “dqn tensorflow”, clicked the first link, and found the core code. Here is an excerpt:
+
+Press enter or click to view image in full size
+
+If you’re familiar with DQN, you can see that there is the target_q_t, which is just [reward * \gamma \argmax_a Q(s’,a)], and then there is q_acted, which is Q(s,a) of the action that was taken. The authors here subtract the two into variable delta, which they then want to minimize on line 295 with the L2 loss with tf.reduce_mean(tf.square()). So far so good.
+
+The problem is on line 291. The authors are trying to be robust to outliers, so if the delta is too large, they clip it with tf.clip_by_value. This is well-intentioned and looks sensible from the perspective of the forward pass, but it introduces a major bug if you think about the backward pass.
+
+The clip_by_value function has a local gradient of zero outside of the range min_delta to max_delta, so whenever the delta is above min/max_delta, the gradient becomes exactly zero during backprop. The authors are clipping the raw Q delta, when they are likely trying to clip the gradient for added robustness. In that case the correct thing to do is to use the Huber loss in place of tf.square:
+
+def clipped_error(x): 
+  return tf.select(tf.abs(x) < 1.0, 
+                   0.5 * tf.square(x), 
+                   tf.abs(x) - 0.5) # condition, true, false
+It’s a bit gross in TensorFlow because all we want to do is clip the gradient if it is above a threshold, but since we can’t meddle with the gradients directly we have to do it in this round-about way of defining the Huber loss. In Torch this would be much more simple.
+
+I submitted an issue on the DQN repo and this was promptly fixed.
+
+In conclusion
+Backpropagation is a leaky abstraction; it is a credit assignment scheme with non-trivial consequences. If you try to ignore how it works under the hood because “TensorFlow automagically makes my networks learn”, you will not be ready to wrestle with the dangers it presents, and you will be much less effective at building and debugging neural networks.
+
+The good news is that backpropagation is not that difficult to understand, if presented properly. I have relatively strong feelings on this topic because it seems to me that 95% of backpropagation materials out there present it all wrong, filling pages with mechanical math. Instead, I would recommend the CS231n lecture on backprop which emphasizes intuition (yay for shameless self-advertising). And if you can spare the time, as a bonus, work through the CS231n assignments, which get you to write backprop manually and help you solidify your understanding.
+
+That’s it for now! I hope you’ll be much more suspicious of backpropagation going forward and think carefully through what the backward pass is doing. Also, I’m aware that this post has (unintentionally!) turned into several CS231n ads. Apologies for that :)
+
+Machine Learning
+Neural Networks
+Deep Learning
+Artificial Intelligence
+20K
+
+
+49
+
+
+Andrej Karpathy
+Written by Andrej Karpathy
+60K followers
+·
+186 following
+I like to train deep neural nets on large datasets.
+
+
+Follow
+Help
+
+Status
+
+About
+
+Careers
+
+Press
+
+Blog
+
+Privacy
+
+Rules
+
+Terms
+
+Search
+
+Get app
+Write
+Sign up
+
+Sign in
+
+
+Unknown user
+Top highlight
+
+Virtual Reality: still not quite there, again.
+Andrej Karpathy
+Andrej Karpathy
+
+Follow
+11 min read
+·
+Jan 18, 2017
+841
+
+
+19
+
+
+
+The first time I tried out Virtual Reality was a while ago — somewhere in the late 1990's. I was quite young so my memory is a bit hazy, but I remember a research-lab-like room full of hardware, wires, and in the middle a large chair with a big helmet that came down over your head. I was put through some standard 3 minute demo where you look around, things move around you, they scare you by dropping you down, basics. The display was low-resolution, had strong ghosting artifacts, there was long response lag, and the whole thing was quite a terrible experience. I remember finally putting up the helmet and feeling simultaneously highly nauseated and… extremely excited. This was the future! I imagined the imminent miniaturization, rapid improvements in visual fidelity, VR arcades, holodecks!
+
+Press enter or click to view image in full size
+
+1990’s virtual reality. Not sure if this is exactly the one I used, but quite similar.
+And then… nothing happened. I never saw that headset again. I rarely ever saw VR mentioned in tech headlines. No VR arcades sprung up across the street that I could visit with my friends. For the young me, VR became an embarrassing misprediction, right next to “obviously we’ll have flying cars/jetpacks soon”. Eventually, dreams of fantastical digital universes slipped from my mind entirely. Over time I realized that some technical advances are too easy to imagine, but too hard to execute, and VR falls into this category. I just had to patiently wait for its time to come.
+
+Fast forward to 2012, you can imagine my excitement when I saw the Oculus Kickstarter campaign. It was a dream come true: someone was actually building a serious consumer-grade VR headset, and Gabe Newell was personally endorsing the campaign! Starstruck, I impulsively reached for the “Back this project” button… but then realized I forgot my Kickstarter password. That, and I was afraid this was vaporware. They promised a consumer version eventually and I had decided I can just wait for that.
+
+Press enter or click to view image in full size
+
+Oculus VR Kickstarter, 2012. Cool visuals and Serious star power.
+I don’t want this to be too long of a story. TLDR: I start obsessively checking all updates on Oculus. They get acquired by Facebook. Vive gets introduced. I end up buying both Vive and Oculus consumer version, then cancel the latter based on Reddit discussions. So somewhere mid 2016, a Vive gets delivered to my doorstep somewhere around noon and I skip work, intending to play with it the whole day. I was living in a small dorm room at the university so I moved almost everything from my room to the (shared) living room to get enough space to just barely satisfy the minimum size requirement for a room-scale setup.
+
+Press enter or click to view image in full size
+
+An admittedly-hard-to-see panorama of my humble room, everything cleaned out & ready for VR.
+I think I played with the Vive for about 2 hours that day and you know what? It was… pretty cool. I powered down the computer and went back to work for the remainder of the day.
+
+“Pretty cool.”
+
+This is the phrase I would come to hear over and over again, as I demoed my Vive to my friends. I tried to AB test many aspects of my presentation: the games that I launched, their order, how I described VR or its possibilities, but nothing changed this reaction too much. My friends would put it on, try out some of the games and then, quite content, hand it back to me. They’d insist it was “cool”, some were even “blown away”, but it was clear they also weren’t too eager to get back. I later discovered that out of ~few hundred friends (most of them science/tech) I only had a single friend who actually bought a VR system like I did (and I almost bought TWO!, nearly squandering all the savings I could afford with my sorry PhD “salary”). It seemed that none of my friends were too excited (beyond the pretty cool first experience) and, somehow, neither was I.
+
+Press enter or click to view image in full size
+
+Friends trying out VR. Left: Tilt Brush. Middle: Holopoint. Right: Dodging something.
+Today, my Vive is organized in a messy pile of wires in the corner my room. I turn it on from time to time to try out the latest and greatest, but for the most part it collects dust. I did get to explore quite a bit though, so I feel qualified to have some opinions on what things VR do/do not work today.
+
+The features of doing VR wrong.
+Overpriced tech demos. The first issue I noticed immediately is that VR games are expensive (e.g. up to $59.99), but as a friend of mine described it, many of them are “not too deep”. They are the $0.99 games for your phone, except on your face, and for $29.99. I think I ended up spending several hundred dollars buying games for a total of maybe 10 hours of game time. There are many other games that are obviously lazily ported over from PC, in many cases resulting in terrible user experiences. Some of the games were so overpriced and under-cooked (with game-breaking bugs) that I ended up spending the time to file Steam complaints to get money back. Luckily, Steam is quite fast with this and promptly reimbursed the games. A VR consumer has to be careful out there.
+
+Press enter or click to view image in full size
+
+An example of a way over-priced arcade shooter in space that 90% of people will play for <10 minutes.
+VR design anti-patterns. It’s also surprising how many developers try to ignore the new form factor and its constraints. For instance, you cannot translate or rotate (or worse, accelerate) the camera because it gives people nausea. You’d think this simple fact would be obvious common knowledge, but more than 50% of VR games still think that accelerating you around is okay. For example, the PlayStation VR Shark Encounter features a shark aggressively shaking your cage, except of course you don’t feel it. It’s wrong.
+
+A single bug away from nausea. I’ve also experienced game bugs that do weird things to your field of view. Games can switch rapidly from a 3D view to a 2D view “glued” to your eyes, or the screen can flicker, or everything will briefly reverse along some axis, or the inputs to your eyes get switched, or the camera will rapidly spiral out, or something weird. These are extremely negative experiences that usually result in tearing your headset from your head and having to sit down for a while, or completely give up for the evening. VR headsets can also lose tracking in weird ways, which can cause the camera to either drift in some random direction or cause a jitter. In short, the cost of camera errors is extremely high.
+
+The features of doing VR properly
+I found that it’s not too difficult to create an experience that a person would describe as “pretty cool”. Even the number of people who have their “mind blown” is by itself irrelevant to the success of the platform. What is difficult is making one that a person wants to come back to. Only a few games have achieved this for me so far. They fall into three categories:
+
+Get Andrej Karpathy’s stories in your inbox
+Join Medium for free to get updates from this writer.
+
+Enter your email
+Subscribe
+
+Remember me for faster sign in
+
+1. Full body experiences. These are games like AudioShield and Holopoint. There is usually some background music and you have to move your body to achieve game goals. I find these games fun and repeatable whenever I’m in a dancing/moving/feeling really cool mood. Similarly, I love games that get you to manipulate things with your controllers (e.g. Job Simulator). If you’ve only used VR with a gamepad, you are missing out.
+
+Press enter or click to view image in full size
+
+In AudioShield you have to defend yourself from musical notes that are flying at you. Can’t help not dancing while at it.
+2. Creative experiences. These are things like TiltBrush, or any other app that channels your creativity in this new paradigm. TiltBrush today is like the MSPaint of the past, with just the most basic tools and features, but I believe there is a lot of potential for applications like this.
+
+Press enter or click to view image in full size
+
+TiltBrush allows you to paint in 3D. Many brushes have dynamic effects. You can link effects to music.
+3. Social experiences. These are things like AltspaceVR, Rec Room, or Keep Talking and Nobody Explodes. The genius part about these experiences is that the developers don’t have to do the hard work of importing too much complexity into the game. All they have to do is involve people, and their social interactions deliver the complexity and repeatability. I’ve spent quite a bit of fun time in AltspaceVR: watching projected videos in the simulated living room, dancing with people, etc. I met a real-life friend in Altspace and we went for a walk and threw objects at each other, it was great.
+
+Press enter or click to view image in full size
+
+Random people partying together in Rec Room.
+In my opinion the experiences that will eventually make VR most compelling will have these features, and ideally all of them combined. They will connect people over multiplayer (3), give them ways of creating and sharing (2), and take advantage of full body presence in inventive ways (1).
+
+What is VR for?
+If you look at the experiences built for VR today, you’ll notice that most of them are (usually single-player) games. For example I looked at 100 “new releases” for VR today and 100% of them are games. This might be because games are easier or faster to build.
+
+VR is for games as much as Personal Computers are for games, spreadsheets, or searching cooking recipes.
+
+It is notoriously difficult to predict future uses of novel technologies. In 1980’s Personal Computer software involved games and personal finance applications. Amusingly, today all of the action is in a single binary application (the browser), but we can look at some of the 20 most popular websites and see that they cluster around some basic human wants:
+
+Information: “I want to know something”
+Google, YouTube, Wikipedia, Stack Overflow
+Social/Communication: “I want to talk to someone”
+Google (gmail), Facebook, Twitter, Instagram
+Entertainment: “I want to be amused”
+YouTube, Reddit
+In particular, the most valuable companies here have little to do with games, and all of their products are free to use. The PC gaming market is still there and doing fine, estimated to be worth around $36B in 2016, most of it from free-to-play online titles. We can see similar trends reflected in the mobile market. Looking at some of the top used apps, we see:
+
+Information: “I want to know something”
+Google Maps/Search
+Social/Communication: “I want to talk to someone”
+Facebook, Messenger, Snapchat, Instagram, Whatsapp, Gmail, Instagram
+Entertainment: “I want to be amused”
+YouTube, Pandora, Netflix, Spotify, Apple Music
+Again, we see very little gaming, we see that all of these are free-to-use, and several of these apps play to the unique strengths of the form factor that differentiate it from what already exists, such as Maps (GPS, compass, …), and especially photo sharing (camera).
+
+Long story short, currently the most content made for VR are games, but looking at the trends above it seems quite unlikely to me that games (in any quantity) will be the thing that makes VR go big. It’s also not clear to me that many people “get” this, or agree with it, with the possible exception of Facebook, judging by Zuck’s latest VR demo.
+
+Press enter or click to view image in full size
+
+A mixed physical/digital selfie from Zuck’s demo that hurts your brain when you really think about what’s happening here.
+Where does all of this put us?
+So what does the future of VR look like? In terms of the well-known and often-referenced hype curve, one might argue that VR is finally in the stage of slowly climbing, after its peak of expectations around the 90s. However, I think a more nuanced view is that some technologies (especially those that are 1) easy to predict and 2) potentially very impactful) can in fact undergo multiple cycles whenever something exciting happens in the space. No one wants to miss the possibly few hundred $B wave that is coming at some point. I think it is likely that we are in such a situation now (right):
+
+Press enter or click to view image in full size
+
+Artificial Intelligence (something that I know much more about) also falls into the category of “easy to predict and potentially very impactful”, and has similarly gone through several periods excitement followed by “AI winters”.
+
+Why not yet? Despite the excitement that goes back to my childhood, I’ve come to be more pessimistic than optimistic about VR in the short term. There are still too many problems. VR is not like a TV that you can leave running in the background while you chat with a friend or cook a dinner. It’s not like a mobile phone that I can keep around and casually glance at to get some instant gratification. Today, VR is an activity (you have to take a long sequence of non-default actions to plug in), it disconnects you from your immediate surroundings, any interruptions are costly (e.g. I get a phone call, or I need to eat or use the restroom), and also makes you look quite silly. You also won’t avoid some stigma associated with escapism / being a nerd, something that you cannot fix in a few years.
+
+Press enter or click to view image in full size
+
+I don’t know, I can’t quite see it.
+When it does happen. In the medium term (e.g. a decade or two), I could see us make a lot of progress on the hardware and mitigate many of the above problems. For instance, we could shrink VR into face/hand-tracking, high-visual-fidelity, very-low-tracking-error-rate Ray-Ban sunglasses that make you look cool, and you can just slip on in a second to “plug in”. If this does happen, I feel confident making a few predictions about what the killer app for VR would look like. It:
+
+Would have the features above (1. offers functionality that isn’t already “good enough” on an existing technology (especially a mobile phone), in this case e.g. body/face tracking and interactions, 2. allows users to create and share, and 3. is social first).
+It will be free. It will not be $59.99. You’ll pay in other ways of course, either by paying $9.99 for a silly hat, or with your privacy.
+It will cater to basic human needs we see coming up over and over again across time: “I want to know something”, “I want to talk to someone” and “I want to be amused”. It will not be any specific game.
+Or hey, even more amusingly, a killer app could be something B2B, like enabling remote robotic work, where the worker’s commands get recorded and become training data for autonomous robotic systems. This is the core premise of my short story on AI, which I can now plug here. woohoo!
+
+The long term. And finally in the long term, how likely is it that we’ll have a compelling parallel digital universe (e.g. Ready Player One style) that a good fraction of humanity will plug into for a good portion of their life? On this time scale I’m relatively optimistic. After all, we’ll need some artificial difficulty in form of social fun and games when the AIs are doing all the work. Just kidding. I think. A great way to end the post.
+
+Virtual Reality
+Oculus Rift
+Htc Vive
+Investing
+841
+
+
+19
+
+
+Andrej Karpathy
+Written by Andrej Karpathy
+60K followers
+·
+186 following
+I like to train deep neural nets on large datasets.
+
+
+Follow
+Help
+
+Status
+
+About
+
+Careers
+
+Press
+
+Blog
+
+Privacy
+
+Rules
+
+Terms
+
+Search
+
+Get app
+Write
+Sign up
+
+Sign in
+
+
+Unknown user
+
+1
+
+·
+Top highlight
+
+
+1
+
+
+1
+
+ICLR 2017 vs arxiv-sanity
+Andrej Karpathy
+Andrej Karpathy
+
+Follow
+11 min read
+·
+Mar 14, 2017
+736
+
+
+8
+
+
+
+I thought it would be fun to cross-reference the ICLR 2017 (a popular Deep Learning conference) decisions (which fall into 4 categories: oral, poster, workshop, reject) with the number of times each paper was added to someone’s library on arxiv-sanity. ICLR 2017 decision making involves a number of area chairs and reviewers that decide the fate of each paper over a period of few months, while arxiv-sanity involves one person working 2 hours once a month (me), and a number of people who use it to tame the flood of papers out there. It is a battle between top down and bottom up. Lets see what happens.
+
+Here are the decisions for ICLR 2017. A total of 491 papers were submitted, of which 15 (3%)will be an oral, 183 (37.3%) a poster, 48 (9.8%)were suggested for workshop and 245 (49.9%) were rejected. The accepted papers will be presented at ICLR on April 24–27 in Toulon, which I am really looking forward to. Look how amazing it looks:
+
+Press enter or click to view image in full size
+
+Toulon, France. I think.
+But I digress.
+
+On the other hand we have arxiv-sanity, which has a library feature. In short, any registered user can add a paper to their library, and arxiv-sanity will train a personalized SVM on bigram tfidf features of the full text of all papers to make content-based recommendations to the user. For example, I have a number of RL/generative models/CV papers in my library and whenever there is a new paper on these topics it will come up on top in my “recommended” tab. The review pool of arxiv-sanity is as of now a total of 3195 users — this is the number of people with an account that have at least one paper in the library. Together, these users have so far included 55,671 papers into their libraries, i.e. an average of 17.4 papers.
+
+An important feature of arxiv-sanity is that users don’t just upvote papers with no repercussions. Adding a paper to your library has some weight, because that paper will influence your recommendations. You have an incentive to only include things that really matter to you in there. It’s clever right? No? Okay fine.
+
+The experiment
+Long story short, I loop over all papers in ICLR and try to find them on arxiv using an exact match on the title. Some ICLR papers are not on arxiv, and some won’t get matched because the authors renamed them, or they contain weird characters, etc.
+
+For example, lets look at the papers that got an oral at ICLR 2017. We get:
+
+for oral, found 10/15 papers on arxiv with library counts:
+ 64 Reinforcement Learning with Unsupervised Auxiliary Tasks
+ 44 Neural Architecture Search with Reinforcement Learning
+ 38 Understanding deep learning requires rethinking generalizatio...
+ 28 Towards Principled Methods for Training Generative Adversaria...
+ 22 Learning End-to-End Goal-Oriented Dialog
+ 19 Q-Prop: Sample-Efficient Policy Gradient with An Off-Policy C...
+ 13 Learning to Act by Predicting the Future
+ 12 Amortised MAP Inference for Image Super-resolution
+  8 Multi-Agent Cooperation and the Emergence of (Natural) Langua...
+  8 End-to-end Optimized Image Compression
+Here we see that we matched 10 out of 15 oral papers on arxiv, and the number next to each one is the number of people who have added that paper to their library. E.g. “Reinforcement Learning with Unsupervised Auxiliary Tasks” was in a library of 64 arxiv-sanity users. I also had to truncate some paper names because medium.com is improperly conceived and doesn’t let you change the font size.
+
+Get Andrej Karpathy’s stories in your inbox
+Join Medium for free to get updates from this writer.
+
+Enter your email
+Subscribe
+
+Remember me for faster sign in
+
+Now lets look at the posters:
+
+for poster, found 113/183 papers on arxiv with library counts:
+149 Adversarial Feature Learning
+147 Hierarchical Multiscale Recurrent Neural Networks
+140 Recurrent Batch Normalization
+ 80 HyperNetworks
+ 79 FractalNet: Ultra-Deep Neural Networks without Residuals
+ 73 Zoneout: Regularizing RNNs by Randomly Preserving Hidden Acti...
+ 62 Unrolled Generative Adversarial Networks
+ 52 Adversarially Learned Inference
+ 49 Quasi-Recurrent Neural Networks
+ 48 Do Deep Convolutional Nets Really Need to be Deep and Convolu...
+ 46 Neural Photo Editing with Introspective Adversarial Networks
+ 43 An Actor-Critic Algorithm for Sequence Prediction
+ 41 A Learned Representation For Artistic Style
+ 37 Structured Attention Networks
+ 33 Mollifying Networks
+ 30 DeepCoder: Learning to Write Programs
+ 28 SGDR: Stochastic Gradient Descent with Warm Restarts
+ 27 Learning to Navigate in Complex Environments
+ 27 Generative Multi-Adversarial Networks
+ 26 Soft Weight-Sharing for Neural Network Compression
+ 25 Pruning Filters for Efficient ConvNets
+ 24 Why Deep Neural Networks for Function Approximation?
+ 24 Mode Regularized Generative Adversarial Networks
+ 24 Dialogue Learning With Human-in-the-Loop
+ 24 Designing Neural Network Architectures using Reinforcement Le...
+ 23 PGQ: Combining policy gradient and Q-learning
+ 22 Frustratingly Short Attention Spans in Neural Language Modeli...
+ 21 Tracking the World State with Recurrent Entity Networks
+ 21 Deep Probabilistic Programming
+ 20 Density estimation using Real NVP
+ 20 Adversarial Training Methods for Semi-Supervised Text Classif...
+ 19 Semi-Supervised Classification with Graph Convolutional Netwo...
+ 19 PixelVAE: A Latent Variable Model for Natural Images
+ 19 Learning to Optimize
+ 19 Learning a Natural Language Interface with Neural Programmer
+ 19 Entropy-SGD: Biasing Gradient Descent Into Wide Valleys
+ 19 Dynamic Coattention Networks For Question Answering
+ 18 PixelCNN++: Improving the PixelCNN with Discretized Logistic ...
+ 18 Generalizing Skills with Semi-Supervised Reinforcement Learni...
+ 18 Deep Learning with Dynamic Computation Graphs
+ 18 Automatic Rule Extraction from Long Short Term Memory Network...
+ 18 Adversarial Machine Learning at Scale
+ 17 Learning through Dialogue Interactions by Asking Questions
+ 16 Learning to Perform Physics Experiments via Deep Reinforcemen...
+ 16 Categorical Reparameterization with Gumbel-Softmax
+ 15 Sample Efficient Actor-Critic with Experience Replay
+ 14 Variational Lossy Autoencoder
+ 14 Identity Matters in Deep Learning
+ 14 Bidirectional Attention Flow for Machine Comprehension
+ 13 Towards a Neural Statistician
+ 13 Recurrent Mixture Density Network for Spatiotemporal Visual A...
+ 13 On Detecting Adversarial Perturbations
+ 12 Trained Ternary Quantization
+ 12 Improving Policy Gradient by Exploring Under-appreciated Rewa...
+ 12 Capacity and Trainability in Recurrent Neural Networks
+ 11 SampleRNN: An Unconditional End-to-End Neural Audio Generatio...
+ 11 Machine Comprehension Using Match-LSTM and Answer Pointer
+ 11 Latent Sequence Decompositions
+ 11 Calibrating Energy-based Generative Adversarial Networks
+ 10 Unsupervised Cross-Domain Image Generation
+ 10 Learning to Remember Rare Events
+ 10 Highway and Residual Networks learn Unrolled Iterative Estima...
+  9 TopicRNN: A Recurrent Neural Network with Long-Range Semantic...
+  9 Steerable CNNs
+  9 Query-Reduction Networks for Question Answering
+  9 Lossy Image Compression with Compressive Autoencoders
+  9 Learning to Compose Words into Sentences with Reinforcement L...
+  8 Stick-Breaking Variational Autoencoders
+  8 Deep Variational Information Bottleneck
+  8 Batch Policy Gradient Methods for Improving Neural Conversati...
+  7 Discrete Variational Autoencoders
+  7 Data Noising as Smoothing in Neural Network Language Models
+  6 Variable Computation in Recurrent Neural Networks
+  6 Sigma Delta Quantized Networks
+  6 Dropout with Expectation-linear Regularization
+  6 Delving into Transferable Adversarial Examples and Black-box ...
+  6 A Compositional Object-Based Approach to Learning Physical Dy...
+  5 Towards the Limit of Network Quantization
+  5 Tighter bounds lead to improved classifiers
+  5 Pointer Sentinel Mixture Models
+  5 On the Quantitative Analysis of Decoder-Based Generative Mode...
+  5 Neuro-Symbolic Program Synthesis
+  5 Lie-Access Neural Turing Machines
+  5 Learning to superoptimize programs
+  5 Learning Features of Music From Scratch
+  5 Improving Neural Language Models with a Continuous Cache
+  5 Deep Biaffine Attention for Neural Dependency Parsing
+  4 Temporal Ensembling for Semi-Supervised Learning
+  4 Diet Networks: Thin Parameters for Fat Genomics
+  4 DeepDSL: A Compilation-based Domain-Specific Language for Dee...
+  4 DSD: Dense-Sparse-Dense Training for Deep Neural Networks
+  4 A recurrent neural network without chaos
+  3 Trusting SVM for Piecewise Linear CNNs
+  3 The Neural Noisy Channel
+  3 Revisiting Classifier Two-Sample Tests
+  3 Regularizing CNNs with Locally Constrained Decorrelations
+  3 Optimal Binary Autoencoding with Pairwise Correlations
+  3 Loss-aware Binarization of Deep Networks
+  3 Learning Recurrent Representations for Hierarchical Behavior ...
+  3 EPOpt: Learning Robust Neural Network Policies Using Model En...
+  3 Deep Information Propagation
+  2 Words or Characters? Fine-grained Gating for Reading Comprehe...
+  2 Topology and Geometry of Half-Rectified Network Optimization
+  2 Maximum Entropy Flow Networks
+  2 Incorporating long-range consistency in CNN-based texture gen...
+  2 Hadamard Product for Low-rank Bilinear Pooling
+  1 Multi-view Recurrent Neural Acoustic Word Embeddings
+  1 Inductive Bias of Deep Convolutional Networks through Pooling...
+  1 Geometry of Polysemy
+  1 Autoencoding Variational Inference For Topic Models
+  1 A STRUCTURED SELF-ATTENTIVE SENTENCE EMBEDDING
+  0 Deep Multi-task Representation Learning: A Tensor Factorisati...
+  0 A Compare-Aggregate Model for Matching Text Sequences
+Some got a lot of love (149!), and some very little (0). For workshop suggestions we get:
+
+for workshop, found 23/48 papers on arxiv with library counts:
+ 60 Adversarial examples in the physical world
+ 31 Learning in Implicit Generative Models
+ 16 Surprise-Based Intrinsic Motivation for Deep Reinforcement Le...
+ 14 Multiplicative LSTM for sequence modelling
+ 13 Efficient Softmax Approximation for GPUs
+ 12 RenderGAN: Generating Realistic Labeled Data
+ 12 Generalizable Features From Unsupervised Learning
+ 10 Programming With a Differentiable Forth Interpreter
+  8 Gated Multimodal Units for Information Fusion
+  8 Deep Learning with Sets and Point Clouds
+  7 Unsupervised Perceptual Rewards for Imitation Learning
+  5 Song From PI: A Musically Plausible Network for Pop Music Gen...
+  5 Modular Multitask Reinforcement Learning with Policy Sketches
+  5 A Differentiable Physics Engine for Deep Learning in Robotics
+  4 Exponential Machines
+  4 Dataset Augmentation in Feature Space
+  3 Semi-supervised deep learning by metric embedding
+  2 Adaptive Feature Abstraction for Translating Video to Languag...
+  1 Modularized Morphing of Neural Networks
+  1 Learning Continuous Semantic Representations of Symbolic Expr...
+  1 Extrapolation and learning equations
+  0 Online Structure Learning for Sum-Product Networks with Gauss...
+  0 Bit-Pragmatic Deep Neural Network Computing
+and I won’t list all 200-something papers that were rejected, but lets look at the few that arxiv-sanity users really liked, but the ICLR ACs and reviewers did not:
+
+for reject, found 58/245 papers on arxiv with library counts:
+ 46 The Predictron: End-To-End Learning and Planning
+ 39 RL^2: Fast Reinforcement Learning via Slow Reinforcement Lear...
+ 35 Understanding intermediate layers using linear classifier pro...
+ 33 Hierarchical Memory Networks
+ 31 An Analysis of Deep Neural Network Models for Practical Appli...
+ 20 Low-rank passthrough neural networks
+ 19 Higher Order Recurrent Neural Networks
+ 18 Adding Gradient Noise Improves Learning for Very Deep Network...
+ 16 Unsupervised Pretraining for Sequence to Sequence Learning
+ 16 A Joint Many-Task Model: Growing a Neural Network for Multipl...
+ 15 Adversarial examples for generative models
+ 14 Gated-Attention Readers for Text Comprehension
+ 13 Extensions and Limitations of the Neural GPU
+ 12 Warped Convolutions: Efficient Invariance to Spatial Transfor...
+ 11 Neural Combinatorial Optimization with Reinforcement Learning
+ 11 Memory-augmented Attention Modelling for Videos
+ 10 GRAM: Graph-based Attention Model for Healthcare Representati...
+  9 Wav2Letter: an End-to-End ConvNet-based Speech Recognition Sy...
+  9 Understanding trained CNNs by indexing neuron selectivity
+  9 The Power of Sparsity in Convolutional Neural Networks
+  9 Improving Stochastic Gradient Descent with Feedback
+  8 Towards Information-Seeking Agents
+  8 NEWSQA: A MACHINE COMPREHENSION DATASET
+  8 LipNet: End-to-End Sentence-level Lipreading
+  7 Generative Adversarial Parallelization
+  7 Efficient Summarization with Read-Again and Copy Mechanism
+  6 Multi-task learning with deep model based reinforcement learn...
+  6 Multi-modal Variational Encoder-Decoders
+  6 End-to-End Answer Chunk Extraction and Ranking for Reading Co...
+  6 Boosting Image Captioning with Attributes
+  6 Beyond Fine Tuning: A Modular Approach to Learning on Small D...
+  5 Structured Sequence Modeling with Graph Convolutional Recurre...
+  5 Human perception in computer vision
+  5 Cooperative Training of Descriptor and Generator Networks
+Here is the full version, which was not truncated to fit here. There are a few papers on the top of this list that were possibly unfairly rejected.
+
+Here’s another question — what would ICLR 2017 look like if it were simply voted on by the crowd of arxiv-sanity users (of the papers we can find on arxiv)? Here is an excerpt:
+
+oral:
+149 Adversarial Feature Learning
+147 Hierarchical Multiscale Recurrent Neural Networks
+140 Recurrent Batch Normalization
+ 80 HyperNetworks
+ 79 FractalNet: Ultra-Deep Neural Networks without Residuals
+ 73 Zoneout: Regularizing RNNs by Randomly Preserving Hidden Acti...
+ 64 Reinforcement Learning with Unsupervised Auxiliary Tasks
+ 62 Unrolled Generative Adversarial Networks
+ 60 Adversarial examples in the physical world
+ 52 Adversarially Learned Inference
+-------------------------------------------------
+poster:
+ 49 Quasi-Recurrent Neural Networks
+ 48 Do Deep Convolutional Nets Really Need to be Deep and Convolu...
+ 46 The Predictron: End-To-End Learning and Planning
+ 46 Neural Photo Editing with Introspective Adversarial Networks
+ 44 Neural Architecture Search with Reinforcement Learning
+ 43 An Actor-Critic Algorithm for Sequence Prediction
+ 41 A Learned Representation For Artistic Style
+ 39 RL^2: Fast Reinforcement Learning via Slow Reinforcement Lear...
+ 38 Understanding deep learning requires rethinking generalizatio...
+ 37 Structured Attention Networks
+ 35 Understanding intermediate layers using linear classifier pro...
+ 33 Mollifying Networks
+ 33 Hierarchical Memory Networks
+ 31 Learning in Implicit Generative Models
+ 31 An Analysis of Deep Neural Network Models for Practical Appli...
+ 30 DeepCoder: Learning to Write Programs
+...
+Again, the full listing can be found here. Note that in particular, some ICLR2017 papers that were rejected would have been almost an oral based on arxiv-sanity users alone, especially the Predictron, RL², “Understanding intermediate layers”, and “Hierarchical Memory Networks”. Conversely, some accepted papers had very little love from arxiv-sanity users. Here is a full confusion matrix:
+
+Press enter or click to view image in full size
+
+And here is the confusion matrix in text, for each cell, together with the paper titles. This doesn’t look too bad. The two groups don’t agree on the orals at all, agree on the posters quite a bit, and most importantly there are very few confusions between oral/poster and rejection. Also, congratulations to Max et al. for “Reinforcement Learning with Unsupervised Auxiliary Tasks”, which is the only paper that both groups agree should be an oral :)
+
+Finally, I read the following Medium post a few days ago: “Ten Deserving Deep Learning Papers that were Rejected at ICLR 2017”, by Carlos E. Perez. It seems that arxiv-sanity users agree with this post, and all papers listed there (including LipNet)(that we could also find on arxiv) would have been accepted by arxiv-sanity users.
+
+Discussion
+An asterisk. There are several factors that skew these results. For example, the size of arxiv-sanity user base grows over time, so these results likely slightly favor papers that were published on arxiv later than earlier, as these would have come to more user’s attention as new papers on the site. Also, papers are not seen with equal frequencies — for instance if some paper gets tweeted out by someone popular, more people will see it, and more people might add it to their library. And finally, a good argument could be made that on arxiv-sanity “rich get richer”, because arxiv papers are not anonymous and celebrities could get more attention. In this particular case, ICLR 2017 is single-blind so this is not a differentiating factor.
+
+Overall, my own conclusion from this experiment is that there is quite a bit of signal here. And we’re getting it “for free” from a bottom up process on the internet, instead of something that takes a few hundred people several months. And as someone who has had a good amount of long, painful, stressful, rebuttals back and forth on both submitting/reviewing sides that dragged on for multiple weeks/months, I say: Maybe we don’t need it. Or at the very least maybe there is a lot of room for improvement.
+
+EDIT1: someone suggested the fun idea that we add up the number of citations of these papers in ICLR 2018 submitted/accepted papers, and see which ranking “wins” on that metric. Looking forward to that :)
+
+Machine Learning
+Artificial Intelligence
+Academia
+Peer Review
+736
+
+
+8
+
+
+Andrej Karpathy
+Written by Andrej Karpathy
+60K followers
+·
+186 following
+I like to train deep neural nets on large datasets.
+
+
+Follow
+Help
+
+Status
+
+About
+
+Careers
+
+Press
+
+Blog
+
+Privacy
+
+Rules
+
+Terms
+
+Search
+
+Get app
+Write
+Sign up
+
+Sign in
+
+
+Unknown user
+Top highlight
+
+A Peek at Trends in Machine Learning
+Andrej Karpathy
+Andrej Karpathy
+
+Follow
+6 min read
+·
+Apr 7, 2017
+3K
+
+
+10
+
+
+
+Have you looked at Google Trends? It’s pretty cool — you enter some keywords and see how Google Searches of that term vary through time. I thought — hey, I happen to have this arxiv-sanity database of 28,303 (arxiv) Machine Learning papers over the last 5 years, so why not do something similar and take a look at how Machine Learning research has evolved over the last 5 years? The results are fairly fun, so I thought I’d post.
+
+(Edit: machine learning is a large area. A good chunk of this post is about deep learning specifically, which is the subarea I am most familiar with.)
+
+The arxiv singularity
+Let’s first look at the total number of submitted papers across the arxiv-sanity categories (cs.AI,cs.LG,cs.CV,cs.CL,cs.NE,stat.ML), over time. We get the following:
+
+Press enter or click to view image in full size
+
+Yes, March of 2017 saw almost 2,000 submissions in these areas. The peaks are likely due to conference deadlines (e.g. NIPS/ICML). Note that this is not directly a statement about the size of the area itself, since not everyone submits their paper to arxiv, and the fraction of people who do likely changes over time. But the point remains — that’s a lot of papers to be aware of, skim, or (gasp) read.
+
+Get Andrej Karpathy’s stories in your inbox
+Join Medium for free to get updates from this writer.
+
+Enter your email
+Subscribe
+
+Remember me for faster sign in
+
+This total number of papers will serve as the denominator. We can now look at what fraction of papers contain certain keywords of interest.
+
+Deep Learning Frameworks
+To warm up let’s look at the Deep Learning frameworks that are in use. To compute this, we record the fraction of papers that mention the framework somewhere in the full text (anywhere — including bibliography etc). For papers uploaded on March 2017, we get the following:
+
+% of papers 	 framework 	 has been around for (months)
+------------------------------------------------------------
+    9.1          tensorflow       16
+    7.1               caffe       37
+    4.6              theano       54
+    3.3               torch       37
+    2.5               keras       19
+    1.7          matconvnet       26
+    1.2             lasagne       23
+    0.5             chainer       16
+    0.3               mxnet       17
+    0.3                cntk       13
+    0.2             pytorch       1
+    0.1      deeplearning4j       14
+That is, 10% of all papers submitted in March 2017 mention TensorFlow. Of course, not every paper declares the framework used, but if we assume that papers declare the framework with some fixed random probability independent of the framework, then it looks like about 40% of the community is currently using TensorFlow (or a bit more, if you count Keras with the TF backend). And here is the plot of how some of the more popular frameworks evolved over time:
+
+Press enter or click to view image in full size
+
+We can see that Theano has been around for a while but its growth has somewhat stalled. Caffe shot up quickly in 2014, but was overtaken by the TensorFlow singularity in the last few months. Torch (and the very recent PyTorch) are also climbing up, slow and steady. It will be fun to watch this develop in the next few months — my own guess is that Caffe/Theano will go on a slow decline and TF growth will become a bit slower due to PyTorch.
+
+ConvNet Models
+For fun, how about if we look at common ConvNet models? Here, we can clearly see a huge spike up for ResNets, to the point that they occur in 9% of all papers last March:
+
+Press enter or click to view image in full size
+
+Also, who was talking about “inception” before the InceptionNet? Curious.
+
+Optimization algorithms
+In terms of optimization algorithms, it looks like Adam is on a roll, found in about 23% of papers! The actual fraction of use is hard to estimate; it’s likely higher than 23% because some papers don’t declare the optimization algorithm, and a good chunk of papers might not even be optimizing any neural network at all. It’s then likely lower by about 5%, which is the “background activity” of “Adam”, likely a collision with author names, as the Adam optimization algorithm was only released on Dec 2014.
+
+Press enter or click to view image in full size
+
+Researchers
+I was also curious to plot the mentions of some of the most senior PIs in Deep Learning (this gives something similar to citation count, but 1) it is more robust across population of papers with a “0/1” count, and 2) it is normalized by the total size of the pie):
+
+Press enter or click to view image in full size
+
+A few things to note: “bengio” is mentioned in 35% of all submissions, but there are two Bengios: Samy and Yoshua, who add up on this plot. In particular, Geoff Hinton is mentioned in more than 30% of all new papers! That seems like a lot.
+
+Hot or Not Keywords
+Finally, instead of manually going by categories of keywords, let’s actively look at the keywords that are “hot” (or not).
+
+Top hot keywords
+There are many ways to define this, but for this experiment I look at each unigram or bigram in all the papers and record the ratio of its max use last year compared to its max use up to last year. The papers that excel at this metric are those that one year ago were niche, but this year appear with a much higher relative frequency. The top list (slightly edited out some duplicates) comes out as follows:
+
+8.17394726486 resnet
+6.76767676768 tensorflow
+5.21818181818 gans
+5.0098386462 residual networks
+4.34787878788 adam
+2.95181818182 batch normalization
+2.61663993305 fcn
+2.47812783318 vgg16
+2.03636363636 style transfer
+1.99958217686 gated
+1.99057177616 deep reinforcement
+1.98428686543 lstm
+1.93700787402 nmt
+1.90606060606 inception
+1.8962962963 siamese
+1.88976377953 character level
+1.87533998187 region proposal
+1.81670721817 distillation
+1.81400378481 tree search
+1.78578069795 torch
+1.77685950413 policy gradient
+1.77370153867 encoder decoder
+1.74685427385 gru
+1.72430399325 word2vec
+1.71884293052 relu activation
+1.71459655485 visual question
+1.70471560525 image generation
+For example, ResNet’s ratio of 8.17 is because until 1 year ago it appeared in up to only 1.044% of all submissions (in Mar 2016), but last last month (Mar 2017) it appeared in 8.53% of submissions, so 8.53 / 1.044 ~= 8.17. So there you have it — the core innovations that became all the rage over the last year are 1) ResNets, 2) GANs, 3) Adam, 4) BatchNorm. Use more of these to fit in with your friends. In terms of research interests, we see 1) style transfer, 2) deep RL, 3) Neural Machine Translation (“nmt”), and perhaps 4) image generation. And architecturally, it is hot to use 1) Fully Convolutional Nets (FCN), 2) LSTMs/GRUs, 3) Siamese nets, and 4) Encoder decoder nets.
+
+Press enter or click to view image in full size
+
+Top not hot
+How about the reverse? What has seen many fewer submissions over the last year than has historically had a higher “mind share”? Here are a few:
+
+0.0462375339982 fractal
+0.112222705524 learning bayesian
+0.123531424661 ibp
+0.138351983723 texture analysis
+0.152810895084 bayesian network
+0.170535340862 differential evolution
+0.227932960894 wavelet transform
+0.24482875551 dirichlet process
+I’m not sure what “fractal” is referring to, but more generally it looks like bayesian nonparametrics are under attack.
+
+Conclusion
+Now is the time to submit paper on Fully Convolutional Encoder Decoder BatchNorm ResNet GAN applied to Style Transfer, optimized with Adam. Hey, that doesn’t even sound too far-fetched.
+
+:)
+
+Machine Learning
+Artificial Intelligence
+Deep Learning
+3K
+
+
+10
+
+
+Andrej Karpathy
+Written by Andrej Karpathy
+60K followers
+·
+186 following
+I like to train deep neural nets on large datasets.
+
+
+Follow
+Help
+
+Status
+
+About
+
+Careers
+
+Press
+
+Blog
+
+Privacy
+
+Rules
+
+Terms
+
+Text to speech
+Text to speech
+Text to speech
+Text to speech
