@@ -4,3 +4,4 @@ It has a dual input and output ie both via text and via voice ( sadly coudldnt r
 A long term constant memory basically you input basics details like your Name , Skills and goals once
 Some reccomended prompts to help you
 The ui is run by streamlite so to run it - 1. download all the files 2. make sure yuo have all the required libraires installed 3. open terminal and cd into the folder 4. type - "streamlit run app.py" 
+You can also add new data if you want , just add a text file into data, and rerun the inject.py 
